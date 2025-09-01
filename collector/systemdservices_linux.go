@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
 	"github.com/prometheus/client_golang/prometheus"
@@ -80,7 +81,9 @@ func (c *systemdServicesCollector) Update(ch chan<- prometheus.Metric) error {
 }
 
 func (c *systemdServicesCollector) getAllUnits(conn *dbus.Conn) ([]dbus.UnitStatus, error) {
-	units, err := conn.ListUnitsContext(context.TODO())
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	units, err := conn.ListUnitsContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +92,9 @@ func (c *systemdServicesCollector) getAllUnits(conn *dbus.Conn) ([]dbus.UnitStat
 
 func (c *systemdServicesCollector) collectServiceMetrics(conn *dbus.Conn, ch chan<- prometheus.Metric, unit dbus.UnitStatus) error {
 	serviceType := "unknown"
-	typeProperty, err := conn.GetUnitTypePropertyContext(context.TODO(), unit.Name, "Service", "Type")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	typeProperty, err := conn.GetUnitTypePropertyContext(ctx, unit.Name, "Service", "Type")
 	if err == nil {
 		serviceType = typeProperty.Value.Value().(string)
 	}
