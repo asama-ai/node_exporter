@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,8 +23,14 @@ var (
 )
 
 type pcieCollector struct {
-	info   *prometheus.Desc
-	logger *slog.Logger
+	info          *prometheus.Desc
+	currentSpeed  *prometheus.Desc
+	currentWidth  *prometheus.Desc
+	maxSpeed      *prometheus.Desc
+	maxWidth      *prometheus.Desc
+	powerState    *prometheus.Desc
+	d3coldAllowed *prometheus.Desc
+	logger        *slog.Logger
 }
 
 func init() {
@@ -35,11 +42,7 @@ func NewPCIeCollector(logger *slog.Logger) (Collector, error) {
 	return &pcieCollector{
 		info: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "pcie_device", "info"),
-			"Detailed PCIe device information from /sys/bus/pci/devices/. "+
-				"Power state values: D0 (fully powered), D1/D2 (intermediate states), D3hot/D3cold (lowest power). "+
-				"Link speeds are in GT/s (e.g., 2.5, 5.0, 8.0, 16.0). "+
-				"Link widths are lanes (x1, x2, x4, x8, x16). "+
-				"D3cold_allowed indicates if deepest power saving state is supported (0/1).",
+			"Static PCIe device information from /sys/bus/pci/devices/.",
 			[]string{
 				"slot", // Changed from "device"
 				"vendor_id",
@@ -52,12 +55,54 @@ func NewPCIeCollector(logger *slog.Logger) (Collector, error) {
 				"subsystem_device_name", // Changed from "subsystem_device"
 				"class",
 				"revision",
-				"current_speed",
-				"current_width",
-				"max_speed",
-				"max_width",
-				"power_state",
-				"d3cold_allowed",
+			},
+			nil,
+		),
+		currentSpeed: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pcie_slot", "current_speed_gts"),
+			"Current PCIe link speed in GT/s (e.g., 2.5, 5.0, 8.0, 16.0).",
+			[]string{
+				"slot",
+			},
+			nil,
+		),
+		currentWidth: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pcie_slot", "current_width_lanes"),
+			"Current PCIe link width in lanes (e.g., 1, 2, 4, 8, 16).",
+			[]string{
+				"slot",
+			},
+			nil,
+		),
+		maxSpeed: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pcie_slot", "max_speed_gts"),
+			"Maximum PCIe link speed in GT/s (e.g., 2.5, 5.0, 8.0, 16.0).",
+			[]string{
+				"slot",
+			},
+			nil,
+		),
+		maxWidth: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pcie_slot", "max_width_lanes"),
+			"Maximum PCIe link width in lanes (e.g., 1, 2, 4, 8, 16).",
+			[]string{
+				"slot",
+			},
+			nil,
+		),
+		powerState: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pcie_slot", "power_state"),
+			"PCIe device power state: 0 = D0 (fully powered), 1 = D1, 2 = D2, 3 = D3hot, 4 = D3cold (lowest power).",
+			[]string{
+				"slot",
+			},
+			nil,
+		),
+		d3coldAllowed: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pcie_slot", "d3cold_allowed"),
+			"Whether the PCIe device supports D3cold power state (0/1).",
+			[]string{
+				"slot",
 			},
 			nil,
 		),
@@ -95,7 +140,8 @@ func (c *pcieCollector) collectDeviceMetrics(ch chan<- prometheus.Metric, device
 	subsysVendor := getPCIVendorName(subsysVendorID)
 	subsysDevice := getPCISubsystemName(vendorID, devID, subsysVendorID, subsysDeviceID)
 
-	labels := []string{
+	// Static info metric (constant value 1)
+	infoLabels := []string{
 		deviceID,
 		vendorID,
 		vendor,
@@ -107,20 +153,98 @@ func (c *pcieCollector) collectDeviceMetrics(ch chan<- prometheus.Metric, device
 		subsysDevice,
 		readFileContent(filepath.Join(devicePath, "class")),
 		readFileContent(filepath.Join(devicePath, "revision")),
-		readFileContent(filepath.Join(devicePath, "current_link_speed")),
-		readFileContent(filepath.Join(devicePath, "current_link_width")),
-		readFileContent(filepath.Join(devicePath, "max_link_speed")),
-		readFileContent(filepath.Join(devicePath, "max_link_width")),
-		readFileContent(filepath.Join(devicePath, "power_state")),
-		readFileContent(filepath.Join(devicePath, "d3cold_allowed")),
 	}
 
 	ch <- prometheus.MustNewConstMetric(
 		c.info,
 		prometheus.GaugeValue,
 		1,
-		labels...,
+		infoLabels...,
 	)
+
+	// Current speed metric
+	if currentSpeedStr := readFileContent(filepath.Join(devicePath, "current_link_speed")); currentSpeedStr != "unknown" {
+		if currentSpeed, err := parseSpeed(currentSpeedStr); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				c.currentSpeed,
+				prometheus.GaugeValue,
+				currentSpeed,
+				deviceID,
+			)
+		} else {
+			c.logger.Debug("failed to parse current speed", "device", deviceID, "speed", currentSpeedStr, "error", err)
+		}
+	}
+
+	// Current width metric
+	if currentWidthStr := readFileContent(filepath.Join(devicePath, "current_link_width")); currentWidthStr != "unknown" {
+		if currentWidth, err := parseWidth(currentWidthStr); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				c.currentWidth,
+				prometheus.GaugeValue,
+				currentWidth,
+				deviceID,
+			)
+		} else {
+			c.logger.Debug("failed to parse current width", "device", deviceID, "width", currentWidthStr, "error", err)
+		}
+	}
+
+	// Max speed metric
+	if maxSpeedStr := readFileContent(filepath.Join(devicePath, "max_link_speed")); maxSpeedStr != "unknown" {
+		if maxSpeed, err := parseSpeed(maxSpeedStr); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				c.maxSpeed,
+				prometheus.GaugeValue,
+				maxSpeed,
+				deviceID,
+			)
+		} else {
+			c.logger.Debug("failed to parse max speed", "device", deviceID, "speed", maxSpeedStr, "error", err)
+		}
+	}
+
+	// Max width metric
+	if maxWidthStr := readFileContent(filepath.Join(devicePath, "max_link_width")); maxWidthStr != "unknown" {
+		if maxWidth, err := parseWidth(maxWidthStr); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				c.maxWidth,
+				prometheus.GaugeValue,
+				maxWidth,
+				deviceID,
+			)
+		} else {
+			c.logger.Debug("failed to parse max width", "device", deviceID, "width", maxWidthStr, "error", err)
+		}
+	}
+
+	// Power state metric
+	if powerStateStr := readFileContent(filepath.Join(devicePath, "power_state")); powerStateStr != "unknown" {
+		if powerState, err := parsePowerState(powerStateStr); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				c.powerState,
+				prometheus.GaugeValue,
+				powerState,
+				deviceID,
+			)
+		} else {
+			c.logger.Debug("failed to parse power state", "device", deviceID, "value", powerStateStr, "error", err)
+		}
+	}
+
+	// D3cold allowed metric
+	if d3coldAllowedStr := readFileContent(filepath.Join(devicePath, "d3cold_allowed")); d3coldAllowedStr != "unknown" {
+		if d3coldAllowed, err := strconv.ParseFloat(d3coldAllowedStr, 64); err == nil {
+			ch <- prometheus.MustNewConstMetric(
+				c.d3coldAllowed,
+				prometheus.GaugeValue,
+				d3coldAllowed,
+				deviceID,
+			)
+		} else {
+			c.logger.Debug("failed to parse d3cold_allowed", "device", deviceID, "value", d3coldAllowedStr, "error", err)
+		}
+	}
 
 	return nil
 }
@@ -242,4 +366,51 @@ func getPCISubsystemName(vendorID, deviceID, subsysVendorID, subsysDeviceID stri
 		}
 	}
 	return subsysDeviceID
+}
+
+// parseSpeed converts PCIe speed string to numeric GT/s value
+func parseSpeed(speedStr string) (float64, error) {
+	// Remove "GT/s PCIe" suffix if present
+	speedStr = strings.TrimSuffix(speedStr, " GT/s PCIe")
+	// Also handle case where only "GT/s" is present
+	speedStr = strings.TrimSuffix(speedStr, " GT/s")
+	speedStr = strings.TrimSpace(speedStr)
+
+	return strconv.ParseFloat(speedStr, 64)
+}
+
+// parseWidth converts PCIe width string to numeric lanes value
+func parseWidth(widthStr string) (float64, error) {
+	// Remove "x" prefix if present
+	widthStr = strings.TrimPrefix(widthStr, "x")
+	widthStr = strings.TrimSpace(widthStr)
+
+	return strconv.ParseFloat(widthStr, 64)
+}
+
+// parsePowerState converts PCIe power state string to numeric value
+func parsePowerState(powerStateStr string) (float64, error) {
+	// Remove any whitespace
+	powerStateStr = strings.TrimSpace(powerStateStr)
+
+	// Try to parse as numeric first (most common case)
+	if powerState, err := strconv.ParseFloat(powerStateStr, 64); err == nil {
+		return powerState, nil
+	}
+
+	// If numeric parsing fails, try to map string values
+	switch strings.ToLower(powerStateStr) {
+	case "d0", "0":
+		return 0, nil
+	case "d1", "1":
+		return 1, nil
+	case "d2", "2":
+		return 2, nil
+	case "d3hot", "3":
+		return 3, nil
+	case "d3cold", "4":
+		return 4, nil
+	default:
+		return 0, fmt.Errorf("unknown power state: %s", powerStateStr)
+	}
 }
