@@ -11,9 +11,12 @@ import (
 )
 
 type systemdServicesCollector struct {
-	serviceMetrics *prometheus.Desc
-	logger         *slog.Logger
-	conn           *dbus.Conn
+	serviceInfo      *prometheus.Desc
+	serviceState     *prometheus.Desc
+	serviceSubState  *prometheus.Desc
+	serviceLoadState *prometheus.Desc
+	logger           *slog.Logger
+	conn             *dbus.Conn
 }
 
 func init() {
@@ -27,14 +30,28 @@ func NewSystemdServicesCollector(logger *slog.Logger) (Collector, error) {
 	}
 
 	return &systemdServicesCollector{
-		serviceMetrics: prometheus.NewDesc(
+		serviceInfo: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "systemd_services", "info"),
-			"Systemd service status information via D-Bus API. Value is 1 if service is active, 0 otherwise. "+
-				"States include: active, reloading, inactive, failed, activating, deactivating. "+
-				"Types can be: simple, forking, oneshot, dbus, notify, idle. "+
-				"Load states: loaded, error, masked, not-found. "+
-				"Sub states: running, exited, failed, dead, start, stop, reload, auto-restart.",
-			[]string{"name", "state", "type", "load_state", "sub_state"},
+			"Static systemd service information via D-Bus API. Value is always 1.",
+			[]string{"name", "type"},
+			nil,
+		),
+		serviceState: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "systemd_services", "state"),
+			"Systemd service state: 1 = active, 2 = reloading, 3 = inactive, 4 = failed, 5 = activating, 6 = deactivating.",
+			[]string{"name"},
+			nil,
+		),
+		serviceSubState: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "systemd_services", "sub_state"),
+			"Systemd service sub-state: 1 = running, 2 = exited, 3 = failed, 4 = dead, 5 = start, 6 = stop, 7 = reload, 8 = auto-restart.",
+			[]string{"name"},
+			nil,
+		),
+		serviceLoadState: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "systemd_services", "load_state"),
+			"Systemd service load state: 1 = loaded, 2 = error, 3 = masked, 4 = not-found.",
+			[]string{"name"},
 			nil,
 		),
 		logger: logger,
@@ -77,17 +94,112 @@ func (c *systemdServicesCollector) collectServiceMetrics(conn *dbus.Conn, ch cha
 		serviceType = typeProperty.Value.Value().(string)
 	}
 
+	// Info metric (static information, always 1)
 	ch <- prometheus.MustNewConstMetric(
-		c.serviceMetrics,
+		c.serviceInfo,
 		prometheus.GaugeValue,
 		1,
 		unit.Name,
-		unit.ActiveState,
 		serviceType,
-		unit.LoadState,
-		unit.SubState,
 	)
+
+	// State metric (numeric value)
+	if stateValue, err := parseSystemdState(unit.ActiveState); err == nil {
+		ch <- prometheus.MustNewConstMetric(
+			c.serviceState,
+			prometheus.GaugeValue,
+			stateValue,
+			unit.Name,
+		)
+	} else {
+		c.logger.Debug("failed to parse systemd state", "unit", unit.Name, "state", unit.ActiveState, "error", err)
+	}
+
+	// Sub-state metric (numeric value)
+	if subStateValue, err := parseSystemdSubState(unit.SubState); err == nil {
+		ch <- prometheus.MustNewConstMetric(
+			c.serviceSubState,
+			prometheus.GaugeValue,
+			subStateValue,
+			unit.Name,
+		)
+	} else {
+		c.logger.Debug("failed to parse systemd sub-state", "unit", unit.Name, "sub_state", unit.SubState, "error", err)
+	}
+
+	// Load state metric (numeric value)
+	if loadStateValue, err := parseSystemdLoadState(unit.LoadState); err == nil {
+		ch <- prometheus.MustNewConstMetric(
+			c.serviceLoadState,
+			prometheus.GaugeValue,
+			loadStateValue,
+			unit.Name,
+		)
+	} else {
+		c.logger.Debug("failed to parse systemd load state", "unit", unit.Name, "load_state", unit.LoadState, "error", err)
+	}
+
 	return nil
+}
+
+// parseSystemdState converts systemd state string to numeric value
+func parseSystemdState(state string) (float64, error) {
+	switch strings.ToLower(state) {
+	case "active":
+		return 1, nil
+	case "reloading":
+		return 2, nil
+	case "inactive":
+		return 3, nil
+	case "failed":
+		return 4, nil
+	case "activating":
+		return 5, nil
+	case "deactivating":
+		return 6, nil
+	default:
+		return 0, fmt.Errorf("unknown systemd state: %s", state)
+	}
+}
+
+// parseSystemdSubState converts systemd sub-state string to numeric value
+func parseSystemdSubState(subState string) (float64, error) {
+	switch strings.ToLower(subState) {
+	case "running":
+		return 1, nil
+	case "exited":
+		return 2, nil
+	case "failed":
+		return 3, nil
+	case "dead":
+		return 4, nil
+	case "start":
+		return 5, nil
+	case "stop":
+		return 6, nil
+	case "reload":
+		return 7, nil
+	case "auto-restart":
+		return 8, nil
+	default:
+		return 0, fmt.Errorf("unknown systemd sub-state: %s", subState)
+	}
+}
+
+// parseSystemdLoadState converts systemd load state string to numeric value
+func parseSystemdLoadState(loadState string) (float64, error) {
+	switch strings.ToLower(loadState) {
+	case "loaded":
+		return 1, nil
+	case "error":
+		return 2, nil
+	case "masked":
+		return 3, nil
+	case "not-found":
+		return 4, nil
+	default:
+		return 0, fmt.Errorf("unknown systemd load state: %s", loadState)
+	}
 }
 
 func (c *systemdServicesCollector) Close() error {
