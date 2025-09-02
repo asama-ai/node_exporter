@@ -32,25 +32,25 @@ func NewSystemdServicesCollector(logger *slog.Logger) (Collector, error) {
 
 	return &systemdServicesCollector{
 		serviceInfo: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "systemd_services", "info"),
+			prometheus.BuildFQName(namespace, "systemd_service", "info"),
 			"Static systemd service information via D-Bus API. Value is always 1.",
 			[]string{"name", "type"},
 			nil,
 		),
 		serviceState: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "systemd_services", "state"),
+			prometheus.BuildFQName(namespace, "systemd_service", "state"),
 			"Systemd service state: 0 = unknown, 1 = active, 2 = reloading, 3 = inactive, 4 = failed, 5 = activating, 6 = deactivating.",
 			[]string{"name"},
 			nil,
 		),
 		serviceSubState: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "systemd_services", "sub_state"),
+			prometheus.BuildFQName(namespace, "systemd_service", "sub_state"),
 			"Systemd service sub-state: 0 = unknown, 1 = running, 2 = exited, 3 = failed, 4 = dead, 5 = start, 6 = stop, 7 = reload, 8 = auto-restart.",
 			[]string{"name"},
 			nil,
 		),
 		serviceLoadState: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "systemd_services", "load_state"),
+			prometheus.BuildFQName(namespace, "systemd_service", "load_state"),
 			"Systemd service load state: 0 = unknown, 1 = loaded, 2 = error, 3 = masked, 4 = not-found.",
 			[]string{"name"},
 			nil,
