@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -17,6 +18,7 @@ var (
 		"/usr/share/misc/pci.ids",
 		"/usr/share/hwdata/pci.ids",
 	}
+	pciIdsFile    = kingpin.Flag("collector.pcie.idsfile", "Path to pci.ids file to use for PCI device identification.").String()
 	pciVendors    = make(map[string]string)
 	pciDevices    = make(map[string]map[string]string)
 	pciSubsystems = make(map[string]map[string]string)
@@ -269,15 +271,23 @@ func loadPCIIds() {
 	var file *os.File
 	var err error
 
-	// Try each possible path
-	for _, path := range pciIdsPaths {
-		file, err = os.Open(path)
-		if err == nil {
-			break
+	// Use custom pci.ids file if specified
+	if *pciIdsFile != "" {
+		file, err = os.Open(*pciIdsFile)
+		if err != nil {
+			return
 		}
-	}
-	if err != nil {
-		return
+	} else {
+		// Try each possible default path
+		for _, path := range pciIdsPaths {
+			file, err = os.Open(path)
+			if err == nil {
+				break
+			}
+		}
+		if err != nil {
+			return
+		}
 	}
 	defer file.Close()
 
