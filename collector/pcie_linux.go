@@ -20,6 +20,8 @@ var (
 	pciVendors    = make(map[string]string)
 	pciDevices    = make(map[string]map[string]string)
 	pciSubsystems = make(map[string]map[string]string)
+	pciClasses    = make(map[string]string)
+	pciSubclasses = make(map[string]string)
 )
 
 type pcieCollector struct {
@@ -53,6 +55,7 @@ func NewPCIeCollector(logger *slog.Logger) (Collector, error) {
 				"subsystem_vendor_name", // Changed from "subsystem_vendor"
 				"subsystem_device_id",
 				"subsystem_device_name", // Changed from "subsystem_device"
+				"class_id",
 				"class",
 				"revision",
 			},
@@ -140,6 +143,11 @@ func (c *pcieCollector) collectDeviceMetrics(ch chan<- prometheus.Metric, device
 	subsysVendor := getPCIVendorName(subsysVendorID)
 	subsysDevice := getPCISubsystemName(vendorID, devID, subsysVendorID, subsysDeviceID)
 
+	// Parse class ID and convert to string
+	classIDStr := readFileContent(filepath.Join(devicePath, "class"))
+	classID := classIDStr
+	classString := getPCIClassName(classIDStr)
+
 	// Static info metric (constant value 1)
 	infoLabels := []string{
 		deviceID,
@@ -151,7 +159,8 @@ func (c *pcieCollector) collectDeviceMetrics(ch chan<- prometheus.Metric, device
 		subsysVendor,
 		subsysDeviceID,
 		subsysDevice,
-		readFileContent(filepath.Join(devicePath, "class")),
+		classID,
+		classString,
 		readFileContent(filepath.Join(devicePath, "revision")),
 	}
 
@@ -274,7 +283,7 @@ func loadPCIIds() {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	var currentVendor, currentDevice string
+	var currentVendor, currentDevice, currentBaseClass, currentSubclass string
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -282,8 +291,42 @@ func loadPCIIds() {
 			continue
 		}
 
-		// Handle vendor lines (no leading whitespace)
-		if !strings.HasPrefix(line, "\t") {
+		// Handle class lines (starts with 'C')
+		if strings.HasPrefix(line, "C") {
+			parts := strings.SplitN(line, "  ", 2)
+			if len(parts) >= 2 {
+				classID := strings.TrimSpace(parts[0][1:]) // Remove 'C' prefix
+				className := strings.TrimSpace(parts[1])
+				pciClasses[classID] = className
+				currentBaseClass = classID
+				currentSubclass = ""
+			}
+			continue
+		}
+
+		// Handle subclass lines (single tab after class)
+		if strings.HasPrefix(line, "\t") && !strings.HasPrefix(line, "\t\t") {
+			line = strings.TrimPrefix(line, "\t")
+			parts := strings.SplitN(line, "  ", 2)
+			if len(parts) >= 2 && currentBaseClass != "" {
+				subclassID := strings.TrimSpace(parts[0])
+				subclassName := strings.TrimSpace(parts[1])
+				// Store as base class + subclass (e.g., "0100" for SCSI storage controller)
+				fullClassID := currentBaseClass + subclassID
+				pciSubclasses[fullClassID] = subclassName
+				currentSubclass = fullClassID
+			}
+			continue
+		}
+
+		// Handle programming interface lines (double tab after subclass)
+		// We'll skip these for now as they're too specific and not commonly used in metrics
+		if strings.HasPrefix(line, "\t\t") && !strings.HasPrefix(line, "\t\t\t") {
+			continue
+		}
+
+		// Handle vendor lines (no leading whitespace, not starting with 'C')
+		if !strings.HasPrefix(line, "\t") && !strings.HasPrefix(line, "C") {
 			parts := strings.SplitN(line, "  ", 2)
 			if len(parts) >= 2 {
 				currentVendor = strings.TrimSpace(parts[0])
@@ -366,6 +409,31 @@ func getPCISubsystemName(vendorID, deviceID, subsysVendorID, subsysDeviceID stri
 		}
 	}
 	return subsysDeviceID
+}
+
+// getPCIClassName converts PCI class ID to human-readable string using pci.ids
+func getPCIClassName(classID string) string {
+	// Remove "0x" prefix if present and normalize
+	classID = strings.TrimPrefix(classID, "0x")
+	classID = strings.ToLower(classID)
+
+	// Try to find the subclass first (4 digits: base class + subclass)
+	if len(classID) >= 4 {
+		if className, exists := pciSubclasses[classID]; exists {
+			return className
+		}
+	}
+
+	// If not found, try with just the base class (first 2 digits)
+	if len(classID) >= 2 {
+		baseClass := classID[:2]
+		if className, exists := pciClasses[baseClass]; exists {
+			return className
+		}
+	}
+
+	// Return the original class ID if not found
+	return "Unknown class (" + classID + ")"
 }
 
 // parseSpeed converts PCIe speed string to numeric GT/s value
