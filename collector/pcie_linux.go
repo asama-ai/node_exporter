@@ -55,8 +55,8 @@ func NewPCIeCollector(logger *slog.Logger) (Collector, error) {
 				"subsystem_vendor_name", // Changed from "subsystem_vendor"
 				"subsystem_device_id",
 				"subsystem_device_name", // Changed from "subsystem_device"
-				"class_id",
 				"class",
+				"class_name",
 				"revision",
 			},
 			nil,
@@ -143,10 +143,9 @@ func (c *pcieCollector) collectDeviceMetrics(ch chan<- prometheus.Metric, device
 	subsysVendor := getPCIVendorName(subsysVendorID)
 	subsysDevice := getPCISubsystemName(vendorID, devID, subsysVendorID, subsysDeviceID)
 
-	// Parse class ID and convert to string
-	classIDStr := readFileContent(filepath.Join(devicePath, "class"))
-	classID := classIDStr
-	classString := getPCIClassName(classIDStr)
+	// Parse class ID and convert to human-readable name
+	classID := readFileContent(filepath.Join(devicePath, "class"))
+	className := getPCIClassName(classID)
 
 	// Static info metric (constant value 1)
 	infoLabels := []string{
@@ -159,8 +158,8 @@ func (c *pcieCollector) collectDeviceMetrics(ch chan<- prometheus.Metric, device
 		subsysVendor,
 		subsysDeviceID,
 		subsysDevice,
-		classID,
-		classString,
+		classID,   // Keep original hex code
+		className, // Human-readable name
 		readFileContent(filepath.Join(devicePath, "revision")),
 	}
 
@@ -283,7 +282,7 @@ func loadPCIIds() {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	var currentVendor, currentDevice, currentBaseClass, currentSubclass string
+	var currentVendor, currentDevice, currentBaseClass string
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -299,7 +298,6 @@ func loadPCIIds() {
 				className := strings.TrimSpace(parts[1])
 				pciClasses[classID] = className
 				currentBaseClass = classID
-				currentSubclass = ""
 			}
 			continue
 		}
@@ -314,7 +312,6 @@ func loadPCIIds() {
 				// Store as base class + subclass (e.g., "0100" for SCSI storage controller)
 				fullClassID := currentBaseClass + subclassID
 				pciSubclasses[fullClassID] = subclassName
-				currentSubclass = fullClassID
 			}
 			continue
 		}
@@ -419,7 +416,8 @@ func getPCIClassName(classID string) string {
 
 	// Try to find the subclass first (4 digits: base class + subclass)
 	if len(classID) >= 4 {
-		if className, exists := pciSubclasses[classID]; exists {
+		subclass := classID[:4]
+		if className, exists := pciSubclasses[subclass]; exists {
 			return className
 		}
 	}
