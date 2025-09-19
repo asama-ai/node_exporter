@@ -129,19 +129,10 @@ func NewPcideviceCollector(logger *slog.Logger) (Collector, error) {
 
 	// Initialize PCI ID maps
 	c := &pcideviceCollector{
-		fs:            fs,
-		logger:        logger,
-		pciVendors:    make(map[string]string),
-		pciDevices:    make(map[string]map[string]string),
-		pciSubsystems: make(map[string]map[string]string),
-		pciClasses:    make(map[string]string),
-		pciSubclasses: make(map[string]string),
-		pciProgIfs:    make(map[string]string),
-		pciNames:      *pciNames,
+		fs:       fs,
+		logger:   logger,
+		pciNames: *pciNames,
 	}
-
-	// Load PCI IDs after flags have been parsed
-	c.loadPCIIds()
 
 	// Build label names based on whether name resolution is enabled
 	labelNames := append(pcideviceLabelNames,
@@ -149,6 +140,7 @@ func NewPcideviceCollector(logger *slog.Logger) (Collector, error) {
 			"class_id", "vendor_id", "device_id", "subsystem_vendor_id", "subsystem_device_id", "revision"}...)
 
 	if c.pciNames {
+		c.loadPCIIds()
 		// Add name labels when name resolution is enabled
 		labelNames = append(labelNames, "vendor_name", "device_name", "subsystem_vendor_name", "subsystem_device_name", "class_name")
 	}
@@ -316,6 +308,13 @@ func readFileContent(path string) string {
 func (c *pcideviceCollector) loadPCIIds() {
 	var file *os.File
 	var err error
+
+	c.pciVendors = make(map[string]string)
+	c.pciDevices = make(map[string]map[string]string)
+	c.pciSubsystems = make(map[string]map[string]string)
+	c.pciClasses = make(map[string]string)
+	c.pciSubclasses = make(map[string]string)
+	c.pciProgIfs = make(map[string]string)
 
 	// Use custom pci.ids file if specified
 	if *pciIdsFile != "" {
