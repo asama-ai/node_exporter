@@ -3,7 +3,7 @@ go:
     # .promu-cgo.yml should also be updated.
     version: 1.25
 repository:
-    path: github.com/prometheus/node_exporter
+    path: github.com/asama-ai/node_exporter
 build:
     binaries:
         - name: node_exporter

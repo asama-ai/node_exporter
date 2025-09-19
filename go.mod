@@ -1,4 +1,4 @@
-module github.com/prometheus/node_exporter
+module github.com/asama-ai/node_exporter
 
 go 1.24.0
 
@@ -34,6 +34,8 @@ require (
 
 replace github.com/prometheus/procfs => github.com/asama-ai/procfs v0.0.0-20250918144326-04ba3a4d74d1
 
+replace github.com/prometheus/node_exporter => ./
+
 require (
 	cyphar.com/go-pathrs v0.2.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
@@ -49,7 +51,6 @@ require (
 	github.com/mdlayher/vsock v1.2.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
-	github.com/siebenmann/go-kstat v0.0.0-20210513183136-173c9b0a9973 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
