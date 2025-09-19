@@ -32,6 +32,8 @@ require (
 	howett.net/plist v1.0.1
 )
 
+replace github.com/prometheus/procfs => github.com/asama-ai/procfs v0.0.0-20250918144326-04ba3a4d74d1
+
 require (
 	cyphar.com/go-pathrs v0.2.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
