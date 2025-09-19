@@ -124,6 +124,7 @@ type pcideviceCollector struct {
 
 func init() {
 	registerCollector("pcidevice", defaultDisabled, NewPcideviceCollector)
+	loadPCIIds()
 }
 
 // NewPcideviceCollector returns a new Collector exposing PCI devices stats.
