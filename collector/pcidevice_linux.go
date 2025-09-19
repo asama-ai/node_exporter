@@ -129,7 +129,7 @@ func NewPcideviceCollector(logger *slog.Logger) (Collector, error) {
 	// Build label names based on whether name resolution is enabled
 	labelNames := append(pcideviceLabelNames,
 		[]string{"parent_segment", "parent_bus", "parent_device", "parent_function",
-			"class", "vendor_id", "subsystem_vendor_id", "subsystem_device_id", "revision"}...)
+			"class_id", "vendor_id", "subsystem_vendor_id", "subsystem_device_id", "revision"}...)
 
 	if *pciNames {
 		// Add name labels when name resolution is enabled
