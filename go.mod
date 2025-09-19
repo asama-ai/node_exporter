@@ -32,6 +32,8 @@ require (
 	howett.net/plist v1.0.1
 )
 
+replace github.com/prometheus/procfs => github.com/asama-ai/procfs v0.0.0-20250918144326-04ba3a4d74d1
+
 require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
