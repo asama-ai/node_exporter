@@ -43,9 +43,6 @@ func TestPCICollectorWithNameResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Load test PCI IDs after flags are parsed
-	loadTestPCIIds(t)
-
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	c, err := NewPcideviceCollector(logger)
 	if err != nil {
@@ -54,15 +51,6 @@ func TestPCICollectorWithNameResolution(t *testing.T) {
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(&testPCICollector{pc: c})
-
-	sink := make(chan prometheus.Metric)
-	go func() {
-		err = c.Update(sink)
-		if err != nil {
-			panic(fmt.Errorf("failed to update collector: %s", err))
-		}
-		close(sink)
-	}()
 
 	// Read expected output from fixture file
 	expectedOutput, err := os.ReadFile("fixtures/pcidevice-names-output.txt")
@@ -98,10 +86,4 @@ func (tc *testPCICollector) Collect(ch chan<- prometheus.Metric) {
 
 func (tc *testPCICollector) Describe(ch chan<- *prometheus.Desc) {
 	// No-op for testing
-}
-
-// loadTestPCIIds loads the test PCI IDs file for testing
-func loadTestPCIIds(t *testing.T) {
-	// This function is no longer needed since PCI IDs are now loaded
-	// as part of the collector initialization
 }

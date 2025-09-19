@@ -67,7 +67,7 @@ var (
 
 	pcidevicePowerStateDesc = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, pcideviceSubsystem, "power_state"),
-		"PCIe device power state: 0 = D0 (fully powered), 1 = D1, 2 = D2, 3 = D3hot, 4 = D3cold (lowest power).",
+		"PCIe device power state: 0 = D0 (fully powered), 1 = D1, 2 = D2, 3 = D3hot, 4 = D3cold (lowest power), -1 = Unknown, -2 = Error.",
 		pcideviceLabelNames, nil,
 	)
 
@@ -213,8 +213,19 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 		ch <- c.infoDesc.mustNewConstMetric(1.0, values...)
 
 		// MaxLinkSpeed and CurrentLinkSpeed are represented in GT/s
-		maxLinkSpeedTS := float64(int64(*device.MaxLinkSpeed * 1e9))
-		currentLinkSpeedTS := float64(int64(*device.CurrentLinkSpeed * 1e9))
+		var maxLinkSpeedTS float64
+		if device.MaxLinkSpeed != nil {
+			maxLinkSpeedTS = (*device.MaxLinkSpeed) * 1e9
+		} else {
+			maxLinkSpeedTS = -1
+		}
+
+		var currentLinkSpeedTS float64
+		if device.CurrentLinkSpeed != nil {
+			currentLinkSpeedTS = (*device.CurrentLinkSpeed) * 1e9
+		} else {
+			currentLinkSpeedTS = -1
+		}
 
 		// Get power state information directly from device object
 		var powerState float64
@@ -256,11 +267,26 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 			sriovVfTotalMsix = float64(*device.SriovVfTotalMsix)
 		}
 
+		// Handle link width fields with nil safety
+		var maxLinkWidth float64
+		if device.MaxLinkWidth != nil {
+			maxLinkWidth = float64(*device.MaxLinkWidth)
+		} else {
+			maxLinkWidth = -1
+		}
+
+		var currentLinkWidth float64
+		if device.CurrentLinkWidth != nil {
+			currentLinkWidth = float64(*device.CurrentLinkWidth)
+		} else {
+			currentLinkWidth = -1
+		}
+
 		for i, val := range []float64{
 			maxLinkSpeedTS,
-			float64(*device.MaxLinkWidth),
+			maxLinkWidth,
 			currentLinkSpeedTS,
-			float64(*device.CurrentLinkWidth),
+			currentLinkWidth,
 			powerState,
 			d3coldAllowed,
 			sriovDriversAutoprobe,
@@ -288,20 +314,13 @@ func parsePowerStateFromEnum(powerState sysfs.PciPowerState) float64 {
 		return 3
 	case sysfs.PciPowerStateD3Cold:
 		return 4
-	case sysfs.PciPowerStateUnknown, sysfs.PciPowerStateError:
-		return 0 // Return 0 for unknown/error states
+	case sysfs.PciPowerStateUnknown:
+		return -1
+	case sysfs.PciPowerStateError:
+		return -2
 	default:
-		return 0
+		return -2
 	}
-}
-
-// readFileContent reads content from a file and returns it as a string
-func readFileContent(path string) string {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return "unknown"
-	}
-	return strings.TrimSpace(string(content))
 }
 
 // loadPCIIds loads PCI device information from pci.ids file
