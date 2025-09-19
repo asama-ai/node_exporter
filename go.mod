@@ -1,4 +1,4 @@
-module github.com/prometheus/node_exporter
+module github.com/asama-ai/node_exporter
 
 go 1.24.0
 
@@ -25,6 +25,7 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.66.1
 	github.com/prometheus/exporter-toolkit v0.14.1
+	github.com/prometheus/node_exporter v0.0.0-00010101000000-000000000000
 	github.com/prometheus/procfs v0.17.0
 	github.com/safchain/ethtool v0.6.2
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
@@ -33,6 +34,8 @@ require (
 )
 
 replace github.com/prometheus/procfs => github.com/asama-ai/procfs v0.0.0-20250918144326-04ba3a4d74d1
+
+replace github.com/prometheus/node_exporter => ./
 
 require (
 	github.com/alecthomas/units v0.0.0-20211218093645-b94a6e3cc137 // indirect
@@ -47,7 +50,6 @@ require (
 	github.com/mdlayher/vsock v1.2.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
-	github.com/siebenmann/go-kstat v0.0.0-20210513183136-173c9b0a9973 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
