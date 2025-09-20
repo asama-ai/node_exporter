@@ -100,6 +100,12 @@ var (
 		"Total number of MSI-X vectors for Virtual Functions.",
 		pcideviceLabelNames, nil,
 	)
+
+	pcideviceNumaNodeDesc = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, pcideviceSubsystem, "numa_node"),
+		"NUMA node number for the PCI device. -1 indicates unknown or not available.",
+		pcideviceLabelNames, nil,
+	)
 )
 
 type pcideviceCollector struct {
@@ -166,6 +172,7 @@ func NewPcideviceCollector(logger *slog.Logger) (Collector, error) {
 		{desc: pcideviceSriovNumvfsDesc, valueType: prometheus.GaugeValue},
 		{desc: pcideviceSriovTotalvfsDesc, valueType: prometheus.GaugeValue},
 		{desc: pcideviceSriovVfTotalMsixDesc, valueType: prometheus.GaugeValue},
+		{desc: pcideviceNumaNodeDesc, valueType: prometheus.GaugeValue},
 	}
 
 	return c, nil
@@ -267,6 +274,14 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 			sriovVfTotalMsix = float64(*device.SriovVfTotalMsix)
 		}
 
+		// Handle numa_node with nil safety
+		var numaNode float64
+		if device.NumaNode != nil {
+			numaNode = float64(*device.NumaNode)
+		} else {
+			numaNode = -1
+		}
+
 		// Handle link width fields with nil safety
 		var maxLinkWidth float64
 		if device.MaxLinkWidth != nil {
@@ -293,6 +308,7 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 			sriovNumvfs,
 			sriovTotalvfs,
 			sriovVfTotalMsix,
+			numaNode,
 		} {
 			ch <- c.descs[i].mustNewConstMetric(val, device.Location.Strings()...)
 		}
@@ -339,21 +355,21 @@ func (c *pcideviceCollector) loadPCIIds() {
 	if *pciIdsFile != "" {
 		file, err = os.Open(*pciIdsFile)
 		if err != nil {
-			fmt.Printf("DEBUG: Failed to open PCI IDs file %s: %v\n", *pciIdsFile, err)
+			c.logger.Debug("Failed to open PCI IDs file", "file", *pciIdsFile, "error", err)
 			return
 		}
-		fmt.Printf("DEBUG: Loading PCI IDs from %s\n", *pciIdsFile)
+		c.logger.Debug("Loading PCI IDs from", "file", *pciIdsFile)
 	} else {
 		// Try each possible default path
 		for _, path := range pciIdsPaths {
 			file, err = os.Open(path)
 			if err == nil {
-				fmt.Printf("DEBUG: Loading PCI IDs from default path %s\n", path)
+				c.logger.Debug("Loading PCI IDs from default path", "path", path)
 				break
 			}
 		}
 		if err != nil {
-			fmt.Printf("DEBUG: Failed to open any default PCI IDs file: %v\n", err)
+			c.logger.Debug("Failed to open any default PCI IDs file", "error", err)
 			return
 		}
 	}
@@ -375,7 +391,6 @@ func (c *pcideviceCollector) loadPCIIds() {
 			if len(parts) >= 2 {
 				classID := strings.TrimSpace(parts[0][1:]) // Remove 'C' prefix
 				className := strings.TrimSpace(parts[1])
-				//fmt.Printf("DEBUG: Loading class: classID=%s, className=%s\n", classID, className)
 				c.pciClasses[classID] = className
 				currentBaseClass = classID
 				inClassContext = true
@@ -392,7 +407,6 @@ func (c *pcideviceCollector) loadPCIIds() {
 				subclassName := strings.TrimSpace(parts[1])
 				// Store as base class + subclass (e.g., "0100" for SCSI storage controller)
 				fullClassID := currentBaseClass + subclassID
-				//fmt.Printf("DEBUG: Loading subclass: fullClassID=%s, subclassName=%s\n", fullClassID, subclassName)
 				c.pciSubclasses[fullClassID] = subclassName
 				currentSubclass = fullClassID
 			}
@@ -408,7 +422,6 @@ func (c *pcideviceCollector) loadPCIIds() {
 				progIfName := strings.TrimSpace(parts[1])
 				// Store as base class + subclass + programming interface (e.g., "010802" for NVM Express)
 				fullClassID := currentSubclass + progIfID
-				//fmt.Printf("DEBUG: Loading programming interface: fullClassID=%s, progIfName=%s\n", fullClassID, progIfName)
 				c.pciProgIfs[fullClassID] = progIfName
 			}
 			continue
@@ -419,7 +432,6 @@ func (c *pcideviceCollector) loadPCIIds() {
 			parts := strings.SplitN(line, "  ", 2)
 			if len(parts) >= 2 {
 				currentVendor = strings.TrimSpace(parts[0])
-				//fmt.Printf("DEBUG: Loading vendor: currentVendor=%s, currentVendorName=%s\n", currentVendor, strings.TrimSpace(parts[1]))
 				c.pciVendors[currentVendor] = strings.TrimSpace(parts[1])
 				currentDevice = ""
 				inClassContext = false
@@ -433,7 +445,6 @@ func (c *pcideviceCollector) loadPCIIds() {
 			parts := strings.SplitN(line, "  ", 2)
 			if len(parts) >= 2 && currentVendor != "" {
 				currentDevice = strings.TrimSpace(parts[0])
-				//fmt.Printf("DEBUG: Loading device: currentDevice=%s, currentDeviceName=%s\n", currentDevice, strings.TrimSpace(parts[1]))
 				if c.pciDevices[currentVendor] == nil {
 					c.pciDevices[currentVendor] = make(map[string]string)
 				}
@@ -457,7 +468,6 @@ func (c *pcideviceCollector) loadPCIIds() {
 				subsysParts := strings.Fields(subsysID)
 				if len(subsysParts) == 2 {
 					subsysKey := fmt.Sprintf("%s:%s", subsysParts[0], subsysParts[1])
-					//fmt.Printf("DEBUG: Loading subsystem: key=%s, subsysKey=%s, subsysName=%s\n", key, subsysKey, subsysName)
 					c.pciSubsystems[key][subsysKey] = subsysName
 				}
 			}
@@ -465,7 +475,7 @@ func (c *pcideviceCollector) loadPCIIds() {
 	}
 
 	// Debug summary
-	fmt.Printf("DEBUG: Loaded %d vendors, %d devices, %d subsystems, %d classes, %d subclasses, %d programming interfaces\n",
+	c.logger.Debug("Loaded %d vendors, %d devices, %d subsystems, %d classes, %d subclasses, %d programming interfaces\n",
 		len(c.pciVendors),
 		func() int {
 			total := 0
