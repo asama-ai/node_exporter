@@ -475,7 +475,7 @@ func (c *pcideviceCollector) loadPCIIds() {
 	}
 
 	// Debug summary
-	c.logger.Debug("Loaded %d vendors, %d devices, %d subsystems, %d classes, %d subclasses, %d programming interfaces\n",
+	fmt.Printf("DEBUG: Loaded %d vendors, %d devices, %d subsystems, %d classes, %d subclasses, %d programming interfaces\n",
 		len(c.pciVendors),
 		func() int {
 			total := 0
