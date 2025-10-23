@@ -1,4 +1,4 @@
-module github.com/asama-ai/node_exporter
+module github.com/prometheus/node_exporter
 
 go 1.24.0
 
@@ -31,8 +31,6 @@ require (
 	golang.org/x/sys v0.38.0
 	howett.net/plist v1.0.1
 )
-
-replace github.com/prometheus/procfs => github.com/asama-ai/procfs v0.0.0-20250918144326-04ba3a4d74d1
 
 replace github.com/prometheus/node_exporter => ./
 
