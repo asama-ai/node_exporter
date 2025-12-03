@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -397,14 +395,17 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 
 // collectAerMetrics collects and exposes AER error counters for a PCI device
 func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, device sysfs.PciDevice) {
-	// Construct the PCI device path
-	pciDeviceDir := filepath.Join(*sysPath, "bus", "pci", "devices", device.Location.String())
-
-	// Parse AER counters directly from PCI device directory
-	aerCounters, err := c.parsePciAerCounters(pciDeviceDir)
+	// Get AER counters using the procfs method (handles optional AER support)
+	aerCounters, err := device.AerCounters()
 	if err != nil {
 		// AER files may not exist for all devices, so we silently skip
-		c.logger.Debug("Failed to parse AER counters", "device", device.Location.String(), "error", err)
+		c.logger.Debug("Failed to get AER counters", "device", device.Location.String(), "error", err)
+		return
+	}
+
+	// If AER is not supported, aerCounters will be nil
+	if aerCounters == nil {
+		// AER not supported by this device, skip silently
 		return
 	}
 
@@ -476,207 +477,6 @@ func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, devi
 	if aerCounters.RootPortTotalErrNonFatal != nil {
 		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
 	}
-}
-
-// parsePciAerCounters parses AER counters directly from PCI device directory
-func (c *pcideviceCollector) parsePciAerCounters(deviceDir string) (*sysfs.AerCounters, error) {
-	counters := sysfs.AerCounters{}
-
-	// Parse correctable errors
-	err := c.parsePciCorrectableAerCounters(deviceDir, &counters.Correctable)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse fatal errors
-	err = c.parsePciUncorrectableAerCounters(deviceDir, "fatal", &counters.Fatal)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse non-fatal errors
-	err = c.parsePciUncorrectableAerCounters(deviceDir, "nonfatal", &counters.NonFatal)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse root port errors
-	err = c.parsePciRootPortAerCounters(deviceDir, &counters)
-	if err != nil {
-		return nil, err
-	}
-
-	return &counters, nil
-}
-
-// parsePciCorrectableAerCounters parses correctable AER errors from PCI device directory
-func (c *pcideviceCollector) parsePciCorrectableAerCounters(deviceDir string, counters *sysfs.CorrectableAerCounters) error {
-	path := filepath.Join(deviceDir, "aer_dev_correctable")
-	value, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to read file %q: %w", path, err)
-	}
-
-	for line := range strings.SplitSeq(string(value), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			continue
-		}
-		counterName := fields[0]
-		value, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		switch counterName {
-		case "RxErr":
-			counters.RxErr = value
-		case "BadTLP":
-			counters.BadTLP = value
-		case "BadDLLP":
-			counters.BadDLLP = value
-		case "Rollover":
-			counters.Rollover = value
-		case "Timeout":
-			counters.Timeout = value
-		case "NonFatalErr":
-			counters.NonFatalErr = value
-		case "CorrIntErr":
-			counters.CorrIntErr = value
-		case "HeaderOF":
-			counters.HeaderOF = value
-		case "TOTAL_ERR_COR":
-			counters.TotalErrCor = value
-		}
-	}
-
-	return nil
-}
-
-// parsePciUncorrectableAerCounters parses uncorrectable AER errors from PCI device directory
-func (c *pcideviceCollector) parsePciUncorrectableAerCounters(deviceDir string, counterType string, counters *sysfs.UncorrectableAerCounters) error {
-	path := filepath.Join(deviceDir, "aer_dev_"+counterType)
-	value, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return fmt.Errorf("failed to read file %q: %w", path, err)
-	}
-
-	for line := range strings.SplitSeq(string(value), "\n") {
-		if line == "" {
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) != 2 {
-			continue
-		}
-		counterName := fields[0]
-		value, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-
-		switch counterName {
-		case "Undefined":
-			counters.Undefined = value
-		case "DLP":
-			counters.DLP = value
-		case "SDES":
-			counters.SDES = value
-		case "TLP":
-			counters.TLP = value
-		case "FCP":
-			counters.FCP = value
-		case "CmpltTO":
-			counters.CmpltTO = value
-		case "CmpltAbrt":
-			counters.CmpltAbrt = value
-		case "UnxCmplt":
-			counters.UnxCmplt = value
-		case "RxOF":
-			counters.RxOF = value
-		case "MalfTLP":
-			counters.MalfTLP = value
-		case "ECRC":
-			counters.ECRC = value
-		case "UnsupReq":
-			counters.UnsupReq = value
-		case "ACSViol":
-			counters.ACSViol = value
-		case "UncorrIntErr":
-			counters.UncorrIntErr = value
-		case "BlockedTLP":
-			counters.BlockedTLP = value
-		case "AtomicOpBlocked":
-			counters.AtomicOpBlocked = value
-		case "TLPBlockedErr":
-			counters.TLPBlockedErr = value
-		case "PoisonTLPBlocked":
-			counters.PoisonTLPBlocked = value
-		case "TOTAL_ERR_FATAL":
-			if counterType == "fatal" {
-				counters.TotalErrFatal = value
-			}
-		case "TOTAL_ERR_NONFATAL":
-			if counterType == "nonfatal" {
-				counters.TotalErrNonFatal = value
-			}
-		}
-	}
-
-	return nil
-}
-
-// parsePciRootPortAerCounters parses root port AER errors from PCI device directory
-func (c *pcideviceCollector) parsePciRootPortAerCounters(deviceDir string, counters *sysfs.AerCounters) error {
-	// Parse aer_rootport_total_err_cor
-	path := filepath.Join(deviceDir, "aer_rootport_total_err_cor")
-	value, err := os.ReadFile(path)
-	if err == nil {
-		valueStr := strings.TrimSpace(string(value))
-		if valueStr != "" {
-			v, err := strconv.ParseUint(valueStr, 10, 64)
-			if err == nil {
-				counters.RootPortTotalErrCor = &v
-			}
-		}
-	}
-
-	// Parse aer_rootport_total_err_fatal
-	path = filepath.Join(deviceDir, "aer_rootport_total_err_fatal")
-	value, err = os.ReadFile(path)
-	if err == nil {
-		valueStr := strings.TrimSpace(string(value))
-		if valueStr != "" {
-			v, err := strconv.ParseUint(valueStr, 10, 64)
-			if err == nil {
-				counters.RootPortTotalErrFatal = &v
-			}
-		}
-	}
-
-	// Parse aer_rootport_total_err_nonfatal
-	path = filepath.Join(deviceDir, "aer_rootport_total_err_nonfatal")
-	value, err = os.ReadFile(path)
-	if err == nil {
-		valueStr := strings.TrimSpace(string(value))
-		if valueStr != "" {
-			v, err := strconv.ParseUint(valueStr, 10, 64)
-			if err == nil {
-				counters.RootPortTotalErrNonFatal = &v
-			}
-		}
-	}
-
-	return nil
 }
 
 // loadPCIIds loads PCI device information from pci.ids file
