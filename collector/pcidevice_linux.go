@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/alecthomas/kingpin/v2"
@@ -138,6 +140,43 @@ var (
 			pcideviceLabelNames, nil,
 		),
 		valueType: prometheus.GaugeValue,
+	}
+
+	// AER (Advanced Error Reporting) metric descriptors
+	pcideviceAerCorrectableDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_correctable_errors"),
+			"PCIe AER correctable error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
+
+	pcideviceAerFatalDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_fatal_errors"),
+			"PCIe AER fatal error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
+
+	pcideviceAerNonFatalDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_nonfatal_errors"),
+			"PCIe AER non-fatal error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
+
+	pcideviceAerRootPortDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_rootport_total_errors"),
+			"PCIe AER root port total error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
 	}
 )
 
@@ -347,6 +386,293 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 		// Only emit numa_node metric if the value is available (not -1)
 		if numaNode != -1 {
 			ch <- pcideviceNumaNodeDesc.mustNewConstMetric(numaNode, device.Location.Strings()...)
+		}
+
+		// Collect AER (Advanced Error Reporting) metrics
+		c.collectAerMetrics(ch, device)
+	}
+
+	return nil
+}
+
+// collectAerMetrics collects and exposes AER error counters for a PCI device
+func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, device sysfs.PciDevice) {
+	// Construct the PCI device path
+	pciDeviceDir := filepath.Join(*sysPath, "bus", "pci", "devices", device.Location.String())
+
+	// Parse AER counters directly from PCI device directory
+	aerCounters, err := c.parsePciAerCounters(pciDeviceDir)
+	if err != nil {
+		// AER files may not exist for all devices, so we silently skip
+		c.logger.Debug("Failed to parse AER counters", "device", device.Location.String(), "error", err)
+		return
+	}
+
+	deviceLabels := device.Location.Strings()
+
+	// Expose correctable error counters
+	correctable := aerCounters.Correctable
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.RxErr), append(deviceLabels, "RxErr")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.BadTLP), append(deviceLabels, "BadTLP")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.BadDLLP), append(deviceLabels, "BadDLLP")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.Rollover), append(deviceLabels, "Rollover")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.Timeout), append(deviceLabels, "Timeout")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.NonFatalErr), append(deviceLabels, "NonFatalErr")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.CorrIntErr), append(deviceLabels, "CorrIntErr")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.HeaderOF), append(deviceLabels, "HeaderOF")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.TotalErrCor), append(deviceLabels, "TotalErrCor")...)
+
+	// Expose fatal error counters
+	fatal := aerCounters.Fatal
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.Undefined), append(deviceLabels, "Undefined")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.DLP), append(deviceLabels, "DLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.SDES), append(deviceLabels, "SDES")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TLP), append(deviceLabels, "TLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.FCP), append(deviceLabels, "FCP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.CmpltTO), append(deviceLabels, "CmpltTO")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.CmpltAbrt), append(deviceLabels, "CmpltAbrt")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.UnxCmplt), append(deviceLabels, "UnxCmplt")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.RxOF), append(deviceLabels, "RxOF")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.MalfTLP), append(deviceLabels, "MalfTLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.ECRC), append(deviceLabels, "ECRC")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.UnsupReq), append(deviceLabels, "UnsupReq")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.ACSViol), append(deviceLabels, "ACSViol")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.UncorrIntErr), append(deviceLabels, "UncorrIntErr")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.BlockedTLP), append(deviceLabels, "BlockedTLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
+
+	// Expose non-fatal error counters
+	nonFatal := aerCounters.NonFatal
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.Undefined), append(deviceLabels, "Undefined")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.DLP), append(deviceLabels, "DLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.SDES), append(deviceLabels, "SDES")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLP), append(deviceLabels, "TLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.FCP), append(deviceLabels, "FCP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.CmpltTO), append(deviceLabels, "CmpltTO")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.CmpltAbrt), append(deviceLabels, "CmpltAbrt")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.UnxCmplt), append(deviceLabels, "UnxCmplt")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.RxOF), append(deviceLabels, "RxOF")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.MalfTLP), append(deviceLabels, "MalfTLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.ECRC), append(deviceLabels, "ECRC")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.UnsupReq), append(deviceLabels, "UnsupReq")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.ACSViol), append(deviceLabels, "ACSViol")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.UncorrIntErr), append(deviceLabels, "UncorrIntErr")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.BlockedTLP), append(deviceLabels, "BlockedTLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+
+	// Expose root port error counters (if available)
+	if aerCounters.RootPortTotalErrCor != nil {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrCor), append(deviceLabels, "TotalErrCor")...)
+	}
+	if aerCounters.RootPortTotalErrFatal != nil {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
+	}
+	if aerCounters.RootPortTotalErrNonFatal != nil {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+	}
+}
+
+// parsePciAerCounters parses AER counters directly from PCI device directory
+func (c *pcideviceCollector) parsePciAerCounters(deviceDir string) (*sysfs.AerCounters, error) {
+	counters := sysfs.AerCounters{}
+
+	// Parse correctable errors
+	err := c.parsePciCorrectableAerCounters(deviceDir, &counters.Correctable)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse fatal errors
+	err = c.parsePciUncorrectableAerCounters(deviceDir, "fatal", &counters.Fatal)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse non-fatal errors
+	err = c.parsePciUncorrectableAerCounters(deviceDir, "nonfatal", &counters.NonFatal)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse root port errors
+	err = c.parsePciRootPortAerCounters(deviceDir, &counters)
+	if err != nil {
+		return nil, err
+	}
+
+	return &counters, nil
+}
+
+// parsePciCorrectableAerCounters parses correctable AER errors from PCI device directory
+func (c *pcideviceCollector) parsePciCorrectableAerCounters(deviceDir string, counters *sysfs.CorrectableAerCounters) error {
+	path := filepath.Join(deviceDir, "aer_dev_correctable")
+	value, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read file %q: %w", path, err)
+	}
+
+	for line := range strings.SplitSeq(string(value), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		counterName := fields[0]
+		value, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		switch counterName {
+		case "RxErr":
+			counters.RxErr = value
+		case "BadTLP":
+			counters.BadTLP = value
+		case "BadDLLP":
+			counters.BadDLLP = value
+		case "Rollover":
+			counters.Rollover = value
+		case "Timeout":
+			counters.Timeout = value
+		case "NonFatalErr":
+			counters.NonFatalErr = value
+		case "CorrIntErr":
+			counters.CorrIntErr = value
+		case "HeaderOF":
+			counters.HeaderOF = value
+		case "TOTAL_ERR_COR":
+			counters.TotalErrCor = value
+		}
+	}
+
+	return nil
+}
+
+// parsePciUncorrectableAerCounters parses uncorrectable AER errors from PCI device directory
+func (c *pcideviceCollector) parsePciUncorrectableAerCounters(deviceDir string, counterType string, counters *sysfs.UncorrectableAerCounters) error {
+	path := filepath.Join(deviceDir, "aer_dev_"+counterType)
+	value, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read file %q: %w", path, err)
+	}
+
+	for line := range strings.SplitSeq(string(value), "\n") {
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		counterName := fields[0]
+		value, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			continue
+		}
+
+		switch counterName {
+		case "Undefined":
+			counters.Undefined = value
+		case "DLP":
+			counters.DLP = value
+		case "SDES":
+			counters.SDES = value
+		case "TLP":
+			counters.TLP = value
+		case "FCP":
+			counters.FCP = value
+		case "CmpltTO":
+			counters.CmpltTO = value
+		case "CmpltAbrt":
+			counters.CmpltAbrt = value
+		case "UnxCmplt":
+			counters.UnxCmplt = value
+		case "RxOF":
+			counters.RxOF = value
+		case "MalfTLP":
+			counters.MalfTLP = value
+		case "ECRC":
+			counters.ECRC = value
+		case "UnsupReq":
+			counters.UnsupReq = value
+		case "ACSViol":
+			counters.ACSViol = value
+		case "UncorrIntErr":
+			counters.UncorrIntErr = value
+		case "BlockedTLP":
+			counters.BlockedTLP = value
+		case "AtomicOpBlocked":
+			counters.AtomicOpBlocked = value
+		case "TLPBlockedErr":
+			counters.TLPBlockedErr = value
+		case "PoisonTLPBlocked":
+			counters.PoisonTLPBlocked = value
+		case "TOTAL_ERR_FATAL":
+			if counterType == "fatal" {
+				counters.TotalErrFatal = value
+			}
+		case "TOTAL_ERR_NONFATAL":
+			if counterType == "nonfatal" {
+				counters.TotalErrNonFatal = value
+			}
+		}
+	}
+
+	return nil
+}
+
+// parsePciRootPortAerCounters parses root port AER errors from PCI device directory
+func (c *pcideviceCollector) parsePciRootPortAerCounters(deviceDir string, counters *sysfs.AerCounters) error {
+	// Parse aer_rootport_total_err_cor
+	path := filepath.Join(deviceDir, "aer_rootport_total_err_cor")
+	value, err := os.ReadFile(path)
+	if err == nil {
+		valueStr := strings.TrimSpace(string(value))
+		if valueStr != "" {
+			v, err := strconv.ParseUint(valueStr, 10, 64)
+			if err == nil {
+				counters.RootPortTotalErrCor = &v
+			}
+		}
+	}
+
+	// Parse aer_rootport_total_err_fatal
+	path = filepath.Join(deviceDir, "aer_rootport_total_err_fatal")
+	value, err = os.ReadFile(path)
+	if err == nil {
+		valueStr := strings.TrimSpace(string(value))
+		if valueStr != "" {
+			v, err := strconv.ParseUint(valueStr, 10, 64)
+			if err == nil {
+				counters.RootPortTotalErrFatal = &v
+			}
+		}
+	}
+
+	// Parse aer_rootport_total_err_nonfatal
+	path = filepath.Join(deviceDir, "aer_rootport_total_err_nonfatal")
+	value, err = os.ReadFile(path)
+	if err == nil {
+		valueStr := strings.TrimSpace(string(value))
+		if valueStr != "" {
+			v, err := strconv.ParseUint(valueStr, 10, 64)
+			if err == nil {
+				counters.RootPortTotalErrNonFatal = &v
+			}
 		}
 	}
 
