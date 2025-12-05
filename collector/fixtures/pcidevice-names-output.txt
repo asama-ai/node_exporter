@@ -104,7 +104,6 @@ node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="Timeout",
 node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="NonFatalErr",function="1",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="CorrIntErr",function="1",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="HeaderOF",function="1",segment="0000"} 0
-node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="TotalErrCor",function="1",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="RxErr",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="BadTLP",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="BadDLLP",function="0",segment="0000"} 0
@@ -113,7 +112,6 @@ node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="Timeout",
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="NonFatalErr",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="CorrIntErr",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="HeaderOF",function="0",segment="0000"} 0
-node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="TotalErrCor",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="RxErr",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="BadTLP",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="BadDLLP",function="0",segment="0000"} 0
@@ -122,7 +120,6 @@ node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="Timeout",
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="NonFatalErr",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="CorrIntErr",function="0",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="HeaderOF",function="0",segment="0000"} 0
-node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="TotalErrCor",function="0",segment="0000"} 0
 
 # HELP node_pcidevice_aer_fatal_errors PCIe AER fatal error counters.
 # TYPE node_pcidevice_aer_fatal_errors counter
@@ -144,7 +141,6 @@ node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="BlockedTLP",fun
 node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="AtomicOpBlocked",function="1",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="TLPBlockedErr",function="1",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="PoisonTLPBlocked",function="1",segment="0000"} 0
-node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="TotalErrFatal",function="1",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="Undefined",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="DLP",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="SDES",function="0",segment="0000"} 0
@@ -163,7 +159,6 @@ node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="BlockedTLP",fun
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="AtomicOpBlocked",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="TLPBlockedErr",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="PoisonTLPBlocked",function="0",segment="0000"} 0
-node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="TotalErrFatal",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="Undefined",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="DLP",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="SDES",function="0",segment="0000"} 0
@@ -182,7 +177,6 @@ node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="BlockedTLP",fun
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="AtomicOpBlocked",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="TLPBlockedErr",function="0",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="PoisonTLPBlocked",function="0",segment="0000"} 0
-node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="TotalErrFatal",function="0",segment="0000"} 0
 
 # HELP node_pcidevice_aer_nonfatal_errors PCIe AER non-fatal error counters.
 # TYPE node_pcidevice_aer_nonfatal_errors counter
@@ -204,7 +198,6 @@ node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="BlockedTLP",
 node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="AtomicOpBlocked",function="1",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="TLPBlockedErr",function="1",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="PoisonTLPBlocked",function="1",segment="0000"} 0
-node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="TotalErrNonFatal",function="1",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="Undefined",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="DLP",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="SDES",function="0",segment="0000"} 0
@@ -223,7 +216,6 @@ node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="BlockedTLP",
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="AtomicOpBlocked",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="TLPBlockedErr",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="PoisonTLPBlocked",function="0",segment="0000"} 0
-node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="TotalErrNonFatal",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="Undefined",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="DLP",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="SDES",function="0",segment="0000"} 0
@@ -242,4 +234,3 @@ node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="BlockedTLP",
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="AtomicOpBlocked",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="TLPBlockedErr",function="0",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="PoisonTLPBlocked",function="0",segment="0000"} 0
-node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="TotalErrNonFatal",function="0",segment="0000"} 0
