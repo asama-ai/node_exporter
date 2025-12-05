@@ -396,7 +396,7 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 // collectAerMetrics collects and exposes AER error counters for a PCI device
 func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, device sysfs.PciDevice) {
 	// Get AER counters using the procfs method (handles optional AER support)
-	aerCounters, err := device.AerCounters()
+	aerCounters, err := device.AerCounters(c.fs)
 	if err != nil {
 		// AER files may not exist for all devices, so we silently skip
 		c.logger.Debug("Failed to get AER counters", "device", device.Location.String(), "error", err)
@@ -421,7 +421,6 @@ func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, devi
 	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.NonFatalErr), append(deviceLabels, "NonFatalErr")...)
 	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.CorrIntErr), append(deviceLabels, "CorrIntErr")...)
 	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.HeaderOF), append(deviceLabels, "HeaderOF")...)
-	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.TotalErrCor), append(deviceLabels, "TotalErrCor")...)
 
 	// Expose fatal error counters
 	fatal := aerCounters.Fatal
@@ -443,7 +442,6 @@ func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, devi
 	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
 	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
 	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
-	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
 
 	// Expose non-fatal error counters
 	nonFatal := aerCounters.NonFatal
@@ -465,17 +463,16 @@ func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, devi
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
-	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
 
 	// Expose root port error counters (if available)
-	if aerCounters.RootPortTotalErrCor != nil {
-		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrCor), append(deviceLabels, "TotalErrCor")...)
+	if aerCounters.RootPortTotalErrCor > 0 {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(aerCounters.RootPortTotalErrCor), append(deviceLabels, "TotalErrCor")...)
 	}
-	if aerCounters.RootPortTotalErrFatal != nil {
-		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
+	if aerCounters.RootPortTotalErrFatal > 0 {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(aerCounters.RootPortTotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
 	}
-	if aerCounters.RootPortTotalErrNonFatal != nil {
-		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+	if aerCounters.RootPortTotalErrNonFatal > 0 {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
 	}
 }
 
