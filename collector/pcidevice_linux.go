@@ -386,7 +386,6 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 			ch <- pcideviceNumaNodeDesc.mustNewConstMetric(numaNode, device.Location.Strings()...)
 		}
 
-		// Collect AER (Advanced Error Reporting) metrics
 		c.collectAerMetrics(ch, device)
 	}
 
@@ -464,10 +463,16 @@ func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, devi
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
 
-	// Expose root port error counters (always expose, like other AER metrics)
-	ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(aerCounters.RootPortTotalErrCor), append(deviceLabels, "TotalErrCor")...)
-	ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(aerCounters.RootPortTotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
-	ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+	// Expose root port error counters only if they are not nil (files exist)
+	if aerCounters.RootPortTotalErrCor != nil {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrCor), append(deviceLabels, "TotalErrCor")...)
+	}
+	if aerCounters.RootPortTotalErrFatal != nil {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
+	}
+	if aerCounters.RootPortTotalErrNonFatal != nil {
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+	}
 }
 
 // loadPCIIds loads PCI device information from pci.ids file
