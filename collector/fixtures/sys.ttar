@@ -3363,6 +3363,21 @@ TLPBlockedErr 43
 PoisonTLPBlocked 44
 Mode: 400
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/devices/pci0000:00/0000:00:02.1/0000:01:00.0/aer_rootport_total_err_cor
+Lines: 1
+100
+Mode: 400
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/devices/pci0000:00/0000:00:02.1/0000:01:00.0/aer_rootport_total_err_fatal
+Lines: 1
+200
+Mode: 400
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/devices/pci0000:00/0000:00:02.1/0000:01:00.0/aer_rootport_total_err_nonfatal
+Lines: 1
+300
+Mode: 400
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/devices/pci0000:00/0000:00:02.1/0000:01:00.0/ari_enabled
 Lines: 1
 1
@@ -5505,7 +5520,7 @@ Mode: 644
 Path: sys/devices/pci0000:00/0000:00:02.1/sriov_numvfs
 Lines: 1
 0
-Mode: 644
+Mode: 400
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/devices/pci0000:00/0000:00:02.1/sriov_totalvfs
 Lines: 1
@@ -6017,78 +6032,60 @@ Directory: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0
 Mode: 755
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/aer_dev_correctable
-Lines: 9
-RxErr 0
-BadTLP 0
-BadDLLP 0
-Rollover 0
-Timeout 0
-NonFatalErr 0
-CorrIntErr 0
-HeaderOF 0
-TOTAL_ERR_COR 0
-Mode: 400
+Lines: 8
+RxErr 1
+BadTLP 2
+BadDLLP 3
+Rollover 4
+Timeout 5
+NonFatalErr 6
+CorrIntErr 7
+HeaderOF 8
+Mode: 664
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/aer_dev_fatal
-Lines: 19
-Undefined 0
-DLP 0
-SDES 0
-TLP 0
-FCP 0
-CmpltTO 0
-CmpltAbrt 0
-UnxCmplt 0
-RxOF 0
-MalfTLP 0
-ECRC 0
-UnsupReq 0
-ACSViol 0
-UncorrIntErr 0
-BlockedTLP 0
-AtomicOpBlocked 0
-TLPBlockedErr 0
-PoisonTLPBlocked 0
-TOTAL_ERR_FATAL 0
-Mode: 400
+Lines: 18
+Undefined 9
+DLP 10
+SDES 11
+TLP 12
+FCP 13
+CmpltTO 14
+CmpltAbrt 15
+UnxCmplt 16
+RxOF 17
+MalfTLP 18
+ECRC 19
+UnsupReq 20
+ACSViol 21
+UncorrIntErr 22
+BlockedTLP 23
+AtomicOpBlocked 24
+TLPBlockedErr 25
+PoisonTLPBlocked 26
+Mode: 664
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/aer_dev_nonfatal
-Lines: 19
-Undefined 0
-DLP 0
-SDES 0
-TLP 0
-FCP 0
-CmpltTO 0
-CmpltAbrt 0
-UnxCmplt 0
-RxOF 0
-MalfTLP 0
-ECRC 0
-UnsupReq 0
-ACSViol 0
-UncorrIntErr 0
-BlockedTLP 0
-AtomicOpBlocked 0
-TLPBlockedErr 0
-PoisonTLPBlocked 0
-TOTAL_ERR_NONFATAL 0
-Mode: 400
-# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/aer_rootport_total_err_cor
-Lines: 1
-100
-Mode: 400
-# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/aer_rootport_total_err_fatal
-Lines: 1
-200
-Mode: 400
-# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/aer_rootport_total_err_nonfatal
-Lines: 1
-300
-Mode: 400
+Lines: 18
+Undefined 27
+DLP 28
+SDES 29
+TLP 30
+FCP 31
+CmpltTO 32
+CmpltAbrt 33
+UnxCmplt 34
+RxOF 35
+MalfTLP 36
+ECRC 37
+UnsupReq 38
+ACSViol 39
+UncorrIntErr 40
+BlockedTLP 41
+AtomicOpBlocked 42
+TLPBlockedErr 43
+PoisonTLPBlocked 44
+Mode: 664
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/devices/pci0000:40/0000:40:01.3/0000:45:00.0/ari_enabled
 Lines: 1
