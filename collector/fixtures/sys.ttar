@@ -878,7 +878,7 @@ Directory: sys/bus/pci/drivers
 Mode: 775
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Directory: sys/bus/pci/drivers/pcieport
-Mode: 775
+Mode: 755
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/bus/pci/drivers/pcieport/0000:00:02.1
 SymlinkTo: ../../../../devices/pci0000:00/0000:00:02.1/
