@@ -113,9 +113,6 @@ node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="NonFatalE
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="CorrIntErr",function="0",segment="0000"} 7
 node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="HeaderOF",function="0",segment="0000"} 8
 
-
-
-
 # HELP node_pcidevice_aer_fatal_errors PCIe AER fatal error counters.
 # TYPE node_pcidevice_aer_fatal_errors counter
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="Undefined",function="0",segment="0000"} 9
@@ -154,8 +151,6 @@ node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="BlockedTLP",fun
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="AtomicOpBlocked",function="0",segment="0000"} 24
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="TLPBlockedErr",function="0",segment="0000"} 25
 node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="PoisonTLPBlocked",function="0",segment="0000"} 26
-
-
 
 # HELP node_pcidevice_aer_nonfatal_errors PCIe AER non-fatal error counters.
 # TYPE node_pcidevice_aer_nonfatal_errors counter
@@ -196,10 +191,11 @@ node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="AtomicOpBloc
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="TLPBlockedErr",function="0",segment="0000"} 43
 node_pcidevice_aer_nonfatal_errors{bus="45",device="00",error_type="PoisonTLPBlocked",function="0",segment="0000"} 44
 
-
-
 # HELP node_pcidevice_aer_rootport_total_errors PCIe AER root port total error counters.
 # TYPE node_pcidevice_aer_rootport_total_errors counter
-node_pcidevice_aer_rootport_total_errors{bus="01",device="00",error_type="TotalErrCor",function="0",segment="0000"} 100
-node_pcidevice_aer_rootport_total_errors{bus="01",device="00",error_type="TotalErrFatal",function="0",segment="0000"} 200
-node_pcidevice_aer_rootport_total_errors{bus="01",device="00",error_type="TotalErrNonFatal",function="0",segment="0000"} 300
+node_pcidevice_aer_rootport_total_errors{bus="00",device="02",error_type="TotalErrCor",function="1",segment="0000"} 1
+node_pcidevice_aer_rootport_total_errors{bus="00",device="02",error_type="TotalErrFatal",function="1",segment="0000"} 2
+node_pcidevice_aer_rootport_total_errors{bus="00",device="02",error_type="TotalErrNonFatal",function="1",segment="0000"} 3
+node_pcidevice_aer_rootport_total_errors{bus="00",device="04",error_type="TotalErrCor",function="1",segment="0000"} 4
+node_pcidevice_aer_rootport_total_errors{bus="00",device="04",error_type="TotalErrFatal",function="1",segment="0000"} 5
+node_pcidevice_aer_rootport_total_errors{bus="00",device="04",error_type="TotalErrNonFatal",function="1",segment="0000"} 6

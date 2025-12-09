@@ -389,6 +389,43 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 		c.collectAerMetrics(ch, device)
 	}
 
+	// Collect root port AER metrics (separate from device-specific AER metrics)
+	if err := c.collectAerRootPortMetrics(ch); err != nil {
+		c.logger.Debug("Failed to collect root port AER metrics", "error", err)
+	}
+
+	return nil
+}
+
+func (c *pcideviceCollector) collectAerRootPortMetrics(ch chan<- prometheus.Metric) error {
+	rootPortAerCounters, err := c.fs.RootPortAerCounters()
+	if err != nil {
+		return fmt.Errorf("failed to get root port AER counters: %w", err)
+	}
+
+	for deviceName, counters := range rootPortAerCounters {
+		// Parse device name (e.g., "0000:00:02.1") into location components
+		var segment, bus, device, function int
+		_, err := fmt.Sscanf(deviceName, "%04x:%02x:%02x.%x", &segment, &bus, &device, &function)
+		if err != nil {
+			c.logger.Debug("Failed to parse root port device name", "device", deviceName, "error", err)
+			continue
+		}
+
+		location := sysfs.PciDeviceLocation{
+			Segment:  segment,
+			Bus:      bus,
+			Device:   device,
+			Function: function,
+		}
+		deviceLabels := location.Strings()
+
+		// Expose root port error counters
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(counters.TotalErrCor), append(deviceLabels, "TotalErrCor")...)
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(counters.TotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(counters.TotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+	}
+
 	return nil
 }
 
@@ -462,17 +499,6 @@ func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, devi
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
 	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
-
-	// Expose root port error counters only if they are not nil (files exist)
-	if aerCounters.RootPortTotalErrCor != nil {
-		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrCor), append(deviceLabels, "TotalErrCor")...)
-	}
-	if aerCounters.RootPortTotalErrFatal != nil {
-		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
-	}
-	if aerCounters.RootPortTotalErrNonFatal != nil {
-		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(*aerCounters.RootPortTotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
-	}
 }
 
 // loadPCIIds loads PCI device information from pci.ids file
