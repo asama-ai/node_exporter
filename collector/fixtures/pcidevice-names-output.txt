@@ -96,6 +96,14 @@ node_pcidevice_sriov_vf_total_msix{bus="45",device="00",function="0",segment="00
 
 # HELP node_pcidevice_aer_correctable_errors PCIe AER correctable error counters.
 # TYPE node_pcidevice_aer_correctable_errors counter
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="RxErr",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="BadTLP",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="BadDLLP",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="Rollover",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="Timeout",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="NonFatalErr",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="CorrIntErr",function="1",segment="0000"} 0
+node_pcidevice_aer_correctable_errors{bus="00",device="02",error_type="HeaderOF",function="1",segment="0000"} 0
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="RxErr",function="0",segment="0000"} 1
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="BadTLP",function="0",segment="0000"} 2
 node_pcidevice_aer_correctable_errors{bus="01",device="00",error_type="BadDLLP",function="0",segment="0000"} 3
@@ -115,6 +123,24 @@ node_pcidevice_aer_correctable_errors{bus="45",device="00",error_type="HeaderOF"
 
 # HELP node_pcidevice_aer_fatal_errors PCIe AER fatal error counters.
 # TYPE node_pcidevice_aer_fatal_errors counter
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="Undefined",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="DLP",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="SDES",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="TLP",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="FCP",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="CmpltTO",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="CmpltAbrt",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="UnxCmplt",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="RxOF",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="MalfTLP",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="ECRC",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="UnsupReq",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="ACSViol",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="UncorrIntErr",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="BlockedTLP",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="AtomicOpBlocked",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="TLPBlockedErr",function="1",segment="0000"} 0
+node_pcidevice_aer_fatal_errors{bus="00",device="02",error_type="PoisonTLPBlocked",function="1",segment="0000"} 0
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="Undefined",function="0",segment="0000"} 9
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="DLP",function="0",segment="0000"} 10
 node_pcidevice_aer_fatal_errors{bus="01",device="00",error_type="SDES",function="0",segment="0000"} 11
@@ -154,6 +180,24 @@ node_pcidevice_aer_fatal_errors{bus="45",device="00",error_type="PoisonTLPBlocke
 
 # HELP node_pcidevice_aer_nonfatal_errors PCIe AER non-fatal error counters.
 # TYPE node_pcidevice_aer_nonfatal_errors counter
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="Undefined",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="DLP",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="SDES",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="TLP",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="FCP",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="CmpltTO",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="CmpltAbrt",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="UnxCmplt",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="RxOF",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="MalfTLP",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="ECRC",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="UnsupReq",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="ACSViol",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="UncorrIntErr",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="BlockedTLP",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="AtomicOpBlocked",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="TLPBlockedErr",function="1",segment="0000"} 0
+node_pcidevice_aer_nonfatal_errors{bus="00",device="02",error_type="PoisonTLPBlocked",function="1",segment="0000"} 0
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="Undefined",function="0",segment="0000"} 27
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="DLP",function="0",segment="0000"} 28
 node_pcidevice_aer_nonfatal_errors{bus="01",device="00",error_type="SDES",function="0",segment="0000"} 29
