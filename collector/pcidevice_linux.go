@@ -139,6 +139,43 @@ var (
 		),
 		valueType: prometheus.GaugeValue,
 	}
+
+	// AER (Advanced Error Reporting) metric descriptors
+	pcideviceAerCorrectableDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_correctable_errors"),
+			"PCIe AER correctable error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
+
+	pcideviceAerFatalDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_fatal_errors"),
+			"PCIe AER fatal error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
+
+	pcideviceAerNonFatalDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_nonfatal_errors"),
+			"PCIe AER non-fatal error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
+
+	pcideviceAerRootPortDesc = typedDesc{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, pcideviceSubsystem, "aer_rootport_total_errors"),
+			"PCIe AER root port total error counters.",
+			append(pcideviceLabelNames, "error_type"), nil,
+		),
+		valueType: prometheus.CounterValue,
+	}
 )
 
 type pcideviceCollector struct {
@@ -348,9 +385,120 @@ func (c *pcideviceCollector) Update(ch chan<- prometheus.Metric) error {
 		if numaNode != -1 {
 			ch <- pcideviceNumaNodeDesc.mustNewConstMetric(numaNode, device.Location.Strings()...)
 		}
+
+		c.collectAerMetrics(ch, device)
+	}
+
+	// Collect root port AER metrics (separate from device-specific AER metrics)
+	if err := c.collectAerRootPortMetrics(ch); err != nil {
+		c.logger.Debug("Failed to collect root port AER metrics", "error", err)
 	}
 
 	return nil
+}
+
+func (c *pcideviceCollector) collectAerRootPortMetrics(ch chan<- prometheus.Metric) error {
+	rootPortAerCounters, err := c.fs.RootPortAerCounters()
+	if err != nil {
+		return fmt.Errorf("failed to get root port AER counters: %w", err)
+	}
+
+	for deviceName, counters := range rootPortAerCounters {
+		// Parse device name (e.g., "0000:00:02.1") into location components
+		var segment, bus, device, function int
+		_, err := fmt.Sscanf(deviceName, "%04x:%02x:%02x.%x", &segment, &bus, &device, &function)
+		if err != nil {
+			c.logger.Debug("Failed to parse root port device name", "device", deviceName, "error", err)
+			continue
+		}
+
+		location := sysfs.PciDeviceLocation{
+			Segment:  segment,
+			Bus:      bus,
+			Device:   device,
+			Function: function,
+		}
+		deviceLabels := location.Strings()
+
+		// Expose root port error counters
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(counters.TotalErrCor), append(deviceLabels, "TotalErrCor")...)
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(counters.TotalErrFatal), append(deviceLabels, "TotalErrFatal")...)
+		ch <- pcideviceAerRootPortDesc.mustNewConstMetric(float64(counters.TotalErrNonFatal), append(deviceLabels, "TotalErrNonFatal")...)
+	}
+
+	return nil
+}
+
+// collectAerMetrics collects and exposes AER error counters for a PCI device
+func (c *pcideviceCollector) collectAerMetrics(ch chan<- prometheus.Metric, device sysfs.PciDevice) {
+	// Get AER counters using the procfs method (handles optional AER support)
+	aerCounters, err := device.AerCounters(c.fs)
+	if err != nil {
+		// AER files may not exist for all devices, so we silently skip
+		c.logger.Debug("Failed to get AER counters", "device", device.Location.String(), "error", err)
+		return
+	}
+
+	// If AER is not supported, aerCounters will be nil
+	if aerCounters == nil {
+		// AER not supported by this device, skip silently
+		return
+	}
+
+	deviceLabels := device.Location.Strings()
+
+	// Expose correctable error counters
+	correctable := aerCounters.Correctable
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.RxErr), append(deviceLabels, "RxErr")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.BadTLP), append(deviceLabels, "BadTLP")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.BadDLLP), append(deviceLabels, "BadDLLP")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.Rollover), append(deviceLabels, "Rollover")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.Timeout), append(deviceLabels, "Timeout")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.NonFatalErr), append(deviceLabels, "NonFatalErr")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.CorrIntErr), append(deviceLabels, "CorrIntErr")...)
+	ch <- pcideviceAerCorrectableDesc.mustNewConstMetric(float64(correctable.HeaderOF), append(deviceLabels, "HeaderOF")...)
+
+	// Expose fatal error counters
+	fatal := aerCounters.Fatal
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.Undefined), append(deviceLabels, "Undefined")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.DLP), append(deviceLabels, "DLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.SDES), append(deviceLabels, "SDES")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TLP), append(deviceLabels, "TLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.FCP), append(deviceLabels, "FCP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.CmpltTO), append(deviceLabels, "CmpltTO")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.CmpltAbrt), append(deviceLabels, "CmpltAbrt")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.UnxCmplt), append(deviceLabels, "UnxCmplt")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.RxOF), append(deviceLabels, "RxOF")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.MalfTLP), append(deviceLabels, "MalfTLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.ECRC), append(deviceLabels, "ECRC")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.UnsupReq), append(deviceLabels, "UnsupReq")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.ACSViol), append(deviceLabels, "ACSViol")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.UncorrIntErr), append(deviceLabels, "UncorrIntErr")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.BlockedTLP), append(deviceLabels, "BlockedTLP")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
+	ch <- pcideviceAerFatalDesc.mustNewConstMetric(float64(fatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
+
+	// Expose non-fatal error counters
+	nonFatal := aerCounters.NonFatal
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.Undefined), append(deviceLabels, "Undefined")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.DLP), append(deviceLabels, "DLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.SDES), append(deviceLabels, "SDES")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLP), append(deviceLabels, "TLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.FCP), append(deviceLabels, "FCP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.CmpltTO), append(deviceLabels, "CmpltTO")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.CmpltAbrt), append(deviceLabels, "CmpltAbrt")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.UnxCmplt), append(deviceLabels, "UnxCmplt")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.RxOF), append(deviceLabels, "RxOF")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.MalfTLP), append(deviceLabels, "MalfTLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.ECRC), append(deviceLabels, "ECRC")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.UnsupReq), append(deviceLabels, "UnsupReq")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.ACSViol), append(deviceLabels, "ACSViol")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.UncorrIntErr), append(deviceLabels, "UncorrIntErr")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.BlockedTLP), append(deviceLabels, "BlockedTLP")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.AtomicOpBlocked), append(deviceLabels, "AtomicOpBlocked")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.TLPBlockedErr), append(deviceLabels, "TLPBlockedErr")...)
+	ch <- pcideviceAerNonFatalDesc.mustNewConstMetric(float64(nonFatal.PoisonTLPBlocked), append(deviceLabels, "PoisonTLPBlocked")...)
 }
 
 // loadPCIIds loads PCI device information from pci.ids file
