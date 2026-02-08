@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"slices"
 	"sort"
+	"time"
 
 	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/promslog/flag"
@@ -76,6 +77,9 @@ func newHandler(includeExporterMetrics bool, maxRequests int, logger *slog.Logge
 
 // ServeHTTP implements http.Handler.
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Sleep 15 seconds before exposing metrics.
+	time.Sleep(15 * time.Second)
+
 	collects := r.URL.Query()["collect[]"]
 	h.logger.Debug("collect query:", "collects", collects)
 
