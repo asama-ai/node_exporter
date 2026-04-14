@@ -151,9 +151,14 @@ func (c *systemdServicesCollector) collectServiceMetrics(conn *dbus.Conn, ch cha
 	if err != nil {
 		c.logger.Debug("couldn't get unit NRestarts", "unit", unit.Name, "err", err)
 	} else {
-		ch <- prometheus.MustNewConstMetric(
-			c.serviceRestartTotal, prometheus.CounterValue,
-			float64(restartsCount.Value.Value().(uint32)), unit.Name)
+		raw := restartsCount.Value.Value()
+		if fv, ok := dbusNumericToFloat64(raw); ok {
+			ch <- prometheus.MustNewConstMetric(
+				c.serviceRestartTotal, prometheus.CounterValue,
+				fv, unit.Name)
+		} else {
+			c.logger.Debug("unexpected NRestarts value type", "unit", unit.Name, "type", fmt.Sprintf("%T", raw))
+		}
 	}
 
 	return nil
@@ -200,6 +205,26 @@ func parseSystemdSubState(subState string) float64 {
 		return 8
 	default:
 		return 0 // unknown
+	}
+}
+
+// dbusNumericToFloat64 converts D-Bus variant numeric values for Prometheus samples.
+func dbusNumericToFloat64(v any) (float64, bool) {
+	switch n := v.(type) {
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		return 0, false
 	}
 }
 
