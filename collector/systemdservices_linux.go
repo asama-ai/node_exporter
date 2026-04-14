@@ -12,12 +12,13 @@ import (
 )
 
 type systemdServicesCollector struct {
-	serviceInfo      *prometheus.Desc
-	serviceState     *prometheus.Desc
-	serviceSubState  *prometheus.Desc
-	serviceLoadState *prometheus.Desc
-	logger           *slog.Logger
-	conn             *dbus.Conn
+	serviceInfo         *prometheus.Desc
+	serviceState        *prometheus.Desc
+	serviceSubState     *prometheus.Desc
+	serviceLoadState    *prometheus.Desc
+	serviceRestartTotal *prometheus.Desc
+	logger              *slog.Logger
+	conn                *dbus.Conn
 }
 
 func init() {
@@ -52,6 +53,12 @@ func NewSystemdServicesCollector(logger *slog.Logger) (Collector, error) {
 		serviceLoadState: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "systemd_service", "load_state"),
 			"Systemd service load state: 0 = unknown, 1 = loaded, 2 = error, 3 = masked, 4 = not-found.",
+			[]string{"name"},
+			nil,
+		),
+		serviceRestartTotal: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "systemd_service", "restart_total"),
+			"Total number of restart triggers for the service unit (systemd Service NRestarts).",
 			[]string{"name"},
 			nil,
 		),
@@ -136,6 +143,18 @@ func (c *systemdServicesCollector) collectServiceMetrics(conn *dbus.Conn, ch cha
 		loadStateValue,
 		unit.Name,
 	)
+
+	// NRestarts wasn't added until systemd 235; older versions return an error (logged at Debug).
+	restartCtx, restartCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer restartCancel()
+	restartsCount, err := conn.GetUnitTypePropertyContext(restartCtx, unit.Name, "Service", "NRestarts")
+	if err != nil {
+		c.logger.Debug("couldn't get unit NRestarts", "unit", unit.Name, "err", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(
+			c.serviceRestartTotal, prometheus.CounterValue,
+			float64(restartsCount.Value.Value().(uint32)), unit.Name)
+	}
 
 	return nil
 }
