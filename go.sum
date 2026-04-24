@@ -4,8 +4,8 @@ github.com/alecthomas/kingpin/v2 v2.4.0 h1:f48lwail6p8zpO1bC4TxtqACaGqHYA22qkHjH
 github.com/alecthomas/kingpin/v2 v2.4.0/go.mod h1:0gyi0zQnjuFk8xrkNKamJoyUo382HRL7ATRpFZCw6tE=
 github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b h1:mimo19zliBX/vSQ6PWWSL9lK8qwHozUj03+zLoEB8O0=
 github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b/go.mod h1:fvzegU4vN3H1qMT+8wDmzjAcDONcgo2/SZ/TyfdUOFs=
-github.com/asama-ai/procfs v1.0.0 h1:T6eRyvvhYWpi6TGTmDCCX8mxwtkoqkCI36SQeeRss1c=
-github.com/asama-ai/procfs v1.0.0/go.mod h1:M0aotyiemPhBCM0z5w87kL22CxfcH05ZpYlu+b4J7mw=
+github.com/asama-ai/procfs v1.1.0 h1:FE9Wye6+Y1e2ZGBNhE+a0dMEYh7yQmDejccNoZ5EVFo=
+github.com/asama-ai/procfs v1.1.0/go.mod h1:UOx4nf4IO0zAKdb6PSRQu4RtIKHJr7R7lrhTakKuHqs=
 github.com/beevik/ntp v1.5.0 h1:y+uj/JjNwlY2JahivxYvtmv4ehfi3h74fAuABB9ZSM4=
 github.com/beevik/ntp v1.5.0/go.mod h1:mJEhBrwT76w9D+IfOEGvuzyuudiW9E52U2BaTrMOYow=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
@@ -86,8 +86,6 @@ github.com/prometheus/common v0.67.5 h1:pIgK94WWlQt1WLwAC5j2ynLaBRDiinoAb86HZHTU
 github.com/prometheus/common v0.67.5/go.mod h1:SjE/0MzDEEAyrdr5Gqc6G+sXI67maCxzaT3A2+HqjUw=
 github.com/prometheus/exporter-toolkit v0.16.0 h1:xT/j7L2XKF+VJd6B4fpUw6xWabHrSmsUf6mYmFqyu0s=
 github.com/prometheus/exporter-toolkit v0.16.0/go.mod h1:d1EL8Z9674xQe/iWhwP2wDyCEoBPbXVeqDbqAUsgJWY=
-github.com/prometheus/procfs v0.20.1 h1:XwbrGOIplXW/AU3YhIhLODXMJYyC1isLFfYCsTEycfc=
-github.com/prometheus/procfs v0.20.1/go.mod h1:o9EMBZGRyvDrSPH1RqdxhojkuXstoe4UlK79eF5TGGo=
 github.com/safchain/ethtool v0.7.0 h1:rlJzfDetsVvT61uz8x1YIcFn12akMfuPulHtZjtb7Is=
 github.com/safchain/ethtool v0.7.0/go.mod h1:MenQKEjXdfkjD3mp2QdCk8B/hwvkrlOTm/FD4gTpFxQ=
 github.com/siebenmann/go-kstat v0.0.0-20210513183136-173c9b0a9973 h1:GfSdC6wKfTGcgCS7BtzF5694Amne1pGCSTY252WhlEY=
