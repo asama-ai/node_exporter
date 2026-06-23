@@ -103,7 +103,7 @@ func NewDiskstatsCollector(logger *slog.Logger) (Collector, error) {
 		infoDesc: typedDesc{
 			desc: prometheus.NewDesc(prometheus.BuildFQName(namespace, diskSubsystem, "info"),
 				"Info of /sys/block/<block_device>.",
-				[]string{"device", "major", "minor", "path", "wwn", "model", "serial", "revision", "rotational"},
+				[]string{"device", "major", "minor", "path", "wwn", "model", "serial", "revision", "rotational", "size_bytes"},
 				nil,
 			), valueType: prometheus.GaugeValue,
 		},
@@ -296,6 +296,15 @@ func (c *diskstatsCollector) Update(ch chan<- prometheus.Metric) error {
 			c.logger.Debug("Failed to get block device queue stats", "device", dev, "err", err)
 		}
 
+		sizeBytes := ""
+		if size, err := c.fs.SysBlockDeviceSize(dev); err != nil {
+			if !os.IsNotExist(err) {
+				c.logger.Debug("Failed to get block device size", "device", dev, "err", err)
+			}
+		} else {
+			sizeBytes = strconv.FormatUint(size, 10)
+		}
+
 		ch <- c.infoDesc.mustNewConstMetric(1.0, dev,
 			fmt.Sprint(stats.MajorNumber),
 			fmt.Sprint(stats.MinorNumber),
@@ -305,6 +314,7 @@ func (c *diskstatsCollector) Update(ch chan<- prometheus.Metric) error {
 			serial,
 			info[udevIDRevision],
 			strconv.FormatUint(queueStats.Rotational, 2),
+			sizeBytes,
 		)
 
 		statCount := stats.IoStatsCount - 3 // Total diskstats record count, less MajorNumber, MinorNumber and DeviceName
