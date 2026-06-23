@@ -826,6 +826,11 @@ Lines: 1
 none
 Mode: 644
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/block/sda/size
+Lines: 1
+1953525168
+Mode: 664
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Directory: sys/bus
 Mode: 755
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2231,27 +2236,12 @@ Lines: 1
 Samsung SSD 970 PRO 512GB
 Mode: 444
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Path: sys/class/nvme/nvme0/serial
-Lines: 1
-S680HF8N190894I
-Mode: 444
-# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Path: sys/class/nvme/nvme0/state
-Lines: 1
-live
-Mode: 444
-# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Directory: sys/class/nvme/nvme0/nvme0c0n0
 Mode: 755
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/class/nvme/nvme0/nvme0c0n0/ana_state
 Lines: 1
 optimized
-Mode: 444
-# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-Path: sys/class/nvme/nvme0/nvme0c0n0/size
-Lines: 1
-3906250000
 Mode: 444
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Path: sys/class/nvme/nvme0/nvme0c0n0/nuse
@@ -2266,6 +2256,21 @@ Path: sys/class/nvme/nvme0/nvme0c0n0/queue/logical_block_size
 Lines: 1
 4096
 Mode: 644
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/class/nvme/nvme0/nvme0c0n0/size
+Lines: 1
+3906250000
+Mode: 444
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/class/nvme/nvme0/serial
+Lines: 1
+S680HF8N190894I
+Mode: 444
+# ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Path: sys/class/nvme/nvme0/state
+Lines: 1
+live
+Mode: 444
 # ttar - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Directory: sys/class/power_supply
 Mode: 755
