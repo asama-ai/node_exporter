@@ -104,6 +104,97 @@ func TestSystemdCollectorsUpdateDialFailure(t *testing.T) {
 	}
 }
 
+func TestSkipInactiveOneshotLookupOnlyWhenInactive(t *testing.T) {
+	lookups := 0
+	lookup := func() string {
+		lookups++
+		return "oneshot"
+	}
+	for _, state := range []string{"active", "failed", "activating", "deactivating", "reloading"} {
+		if skipInactiveOneshotLazy(state, lookup) {
+			t.Fatalf("%s: must emit", state)
+		}
+	}
+	if lookups != 0 {
+		t.Fatalf("non-inactive type lookups=%d want 0", lookups)
+	}
+	if !skipInactiveOneshotLazy("inactive", lookup) {
+		t.Fatal("inactive oneshot must skip")
+	}
+	if lookups != 1 {
+		t.Fatalf("inactive oneshot lookups=%d want 1", lookups)
+	}
+	if skipInactiveOneshotLazy("inactive", func() string { return "simple" }) {
+		t.Fatal("inactive simple is a down long-running unit")
+	}
+}
+
+func TestRetainUnitTypesDropsAbsent(t *testing.T) {
+	c := &systemdServicesCollector{unitType: map[string]string{
+		"gone.service":   "oneshot",
+		"keep.service":   "oneshot",
+		"active.service": "simple",
+	}}
+	c.retainUnitTypes(map[string]struct{}{
+		"keep.service":   {},
+		"active.service": {},
+	})
+	if _, ok := c.unitType["gone.service"]; ok {
+		t.Fatal("stale type for absent unit must be dropped")
+	}
+	if c.unitType["keep.service"] != "oneshot" {
+		t.Fatalf("keep: %q", c.unitType["keep.service"])
+	}
+	if c.unitType["active.service"] != "simple" {
+		t.Fatalf("active: %q", c.unitType["active.service"])
+	}
+}
+
+func TestSkipInactiveOneshot(t *testing.T) {
+	if !skipInactiveOneshot("inactive", "oneshot") {
+		t.Fatal("inactive oneshot must skip")
+	}
+	if !skipInactiveOneshot("Inactive", "Oneshot") {
+		t.Fatal("case-insensitive")
+	}
+	if skipInactiveOneshot("inactive", "simple") {
+		t.Fatal("inactive simple is a down long-running unit")
+	}
+	if skipInactiveOneshot("failed", "oneshot") {
+		t.Fatal("failed oneshot must emit")
+	}
+	if skipInactiveOneshot("active", "oneshot") {
+		t.Fatal("active oneshot (RemainAfterExit) must emit")
+	}
+	if skipInactiveOneshot("activating", "oneshot") {
+		t.Fatal("activating oneshot must emit")
+	}
+	if skipInactiveOneshot("inactive", "") {
+		t.Fatal("unknown type must emit (fail-open)")
+	}
+}
+
+func TestSkipInactiveNotFound(t *testing.T) {
+	if !skipInactiveNotFound("inactive", "not-found") {
+		t.Fatal("inactive not-found must skip")
+	}
+	if !skipInactiveNotFound("Inactive", "Not-Found") {
+		t.Fatal("case-insensitive")
+	}
+	if skipInactiveNotFound("inactive", "loaded") {
+		t.Fatal("inactive loaded is a down long-running unit")
+	}
+	if skipInactiveNotFound("failed", "not-found") {
+		t.Fatal("failed not-found must emit")
+	}
+	if skipInactiveNotFound("activating", "not-found") {
+		t.Fatal("activating not-found must emit")
+	}
+	if skipInactiveNotFound("inactive", "") {
+		t.Fatal("unknown load state must emit (fail-open)")
+	}
+}
+
 func TestServiceTypeFromProps(t *testing.T) {
 	if got := serviceTypeFromProps(nil); got != "" {
 		t.Fatalf("nil props: %q", got)
