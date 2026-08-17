@@ -124,6 +124,13 @@ func skipInactiveOneshot(activeState, serviceType string) bool {
 	return strings.EqualFold(activeState, "inactive") && strings.EqualFold(serviceType, "oneshot")
 }
 
+func skipInactiveOneshotLazy(activeState string, lookupType func() string) bool {
+	if !strings.EqualFold(activeState, "inactive") {
+		return false
+	}
+	return skipInactiveOneshot(activeState, lookupType())
+}
+
 func skipInactiveNotFound(activeState, loadState string) bool {
 	return strings.EqualFold(activeState, "inactive") && strings.EqualFold(loadState, "not-found")
 }
@@ -158,14 +165,16 @@ func (c *systemdServicesCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), systemdInfoUnitDeadline)
 	defer cancel()
+	present := make(map[string]struct{}, len(units))
 	for _, unit := range units {
 		if !isServiceUnit(unit.Name) {
 			continue
 		}
+		present[unit.Name] = struct{}{}
 		if skipInactiveNotFound(unit.ActiveState, unit.LoadState) {
 			continue
 		}
-		if skipInactiveOneshot(unit.ActiveState, c.serviceType(ctx, conn, unit.Name)) {
+		if skipInactiveOneshotLazy(unit.ActiveState, func() string { return c.serviceType(ctx, conn, unit.Name) }) {
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(
@@ -175,6 +184,7 @@ func (c *systemdServicesCollector) Update(ch chan<- prometheus.Metric) error {
 			unit.Name,
 		)
 	}
+	c.retainUnitTypes(present)
 	return nil
 }
 
@@ -203,6 +213,16 @@ func (c *systemdServicesCollector) serviceType(ctx context.Context, conn *dbus.C
 	c.unitType[name] = t
 	c.typeMu.Unlock()
 	return t
+}
+
+func (c *systemdServicesCollector) retainUnitTypes(present map[string]struct{}) {
+	c.typeMu.Lock()
+	defer c.typeMu.Unlock()
+	for name := range c.unitType {
+		if _, ok := present[name]; !ok {
+			delete(c.unitType, name)
+		}
+	}
 }
 
 func (c *systemdServicesCollector) Close() error {

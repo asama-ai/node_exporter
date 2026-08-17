@@ -104,6 +104,52 @@ func TestSystemdCollectorsUpdateDialFailure(t *testing.T) {
 	}
 }
 
+func TestSkipInactiveOneshotLookupOnlyWhenInactive(t *testing.T) {
+	lookups := 0
+	lookup := func() string {
+		lookups++
+		return "oneshot"
+	}
+	for _, state := range []string{"active", "failed", "activating", "deactivating", "reloading"} {
+		if skipInactiveOneshotLazy(state, lookup) {
+			t.Fatalf("%s: must emit", state)
+		}
+	}
+	if lookups != 0 {
+		t.Fatalf("non-inactive type lookups=%d want 0", lookups)
+	}
+	if !skipInactiveOneshotLazy("inactive", lookup) {
+		t.Fatal("inactive oneshot must skip")
+	}
+	if lookups != 1 {
+		t.Fatalf("inactive oneshot lookups=%d want 1", lookups)
+	}
+	if skipInactiveOneshotLazy("inactive", func() string { return "simple" }) {
+		t.Fatal("inactive simple is a down long-running unit")
+	}
+}
+
+func TestRetainUnitTypesDropsAbsent(t *testing.T) {
+	c := &systemdServicesCollector{unitType: map[string]string{
+		"gone.service":   "oneshot",
+		"keep.service":   "oneshot",
+		"active.service": "simple",
+	}}
+	c.retainUnitTypes(map[string]struct{}{
+		"keep.service":   {},
+		"active.service": {},
+	})
+	if _, ok := c.unitType["gone.service"]; ok {
+		t.Fatal("stale type for absent unit must be dropped")
+	}
+	if c.unitType["keep.service"] != "oneshot" {
+		t.Fatalf("keep: %q", c.unitType["keep.service"])
+	}
+	if c.unitType["active.service"] != "simple" {
+		t.Fatalf("active: %q", c.unitType["active.service"])
+	}
+}
+
 func TestSkipInactiveOneshot(t *testing.T) {
 	if !skipInactiveOneshot("inactive", "oneshot") {
 		t.Fatal("inactive oneshot must skip")
