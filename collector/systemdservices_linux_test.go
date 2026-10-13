@@ -14,6 +14,7 @@
 package collector
 
 import (
+	"context"
 	"errors"
 	"io"
 	"log/slog"
@@ -21,7 +22,9 @@ import (
 	"testing"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	godbus "github.com/godbus/dbus/v5"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 func TestNewSystemdCollectorsSkipDial(t *testing.T) {
@@ -221,4 +224,144 @@ func TestNRestartsFromProps(t *testing.T) {
 	if _, ok := nRestartsFromProps(map[string]any{"NRestarts": "nope"}); ok {
 		t.Fatal("unexpected type should not parse")
 	}
+}
+
+func TestSystemdInfoReadsTypeOnceAndRestartsEachTick(t *testing.T) {
+	var typeCalls, restartCalls int
+	c := newTestSystemdInfoCollector(func(_ context.Context, _ *dbus.Conn, unit, name string) (*dbus.Property, error) {
+		switch name {
+		case "Type":
+			typeCalls++
+			return &dbus.Property{Name: name, Value: godbus.MakeVariant("simple")}, nil
+		case "NRestarts":
+			restartCalls++
+			return &dbus.Property{Name: name, Value: godbus.MakeVariant(uint32(2))}, nil
+		default:
+			t.Fatalf("unexpected property %s for %s", name, unit)
+			return nil, nil
+		}
+	})
+	unit := dbus.UnitStatus{Name: "a.service", SubState: "running", LoadState: "loaded"}
+	for tick := 0; tick < 2; tick++ {
+		ch := make(chan prometheus.Metric, 8)
+		c.collectAnalysisMetrics(context.Background(), ch, nil, unit)
+		got := takeMetrics(ch)
+		if len(got) != 4 {
+			t.Fatalf("tick %d: metrics=%d want 4", tick, len(got))
+		}
+		if typ := metricLabel(t, got[0], "type"); typ != "simple" {
+			t.Fatalf("tick %d: type=%q", tick, typ)
+		}
+		if v := metricValue(t, got[3]); v != 2 {
+			t.Fatalf("tick %d: NRestarts=%v", tick, v)
+		}
+	}
+	if typeCalls != 1 || restartCalls != 2 {
+		t.Fatalf("Type calls=%d want 1, NRestarts calls=%d want 2", typeCalls, restartCalls)
+	}
+}
+
+func TestSystemdInfoTypeMissDoesNotCache(t *testing.T) {
+	typeCalls := 0
+	c := newTestSystemdInfoCollector(func(_ context.Context, _ *dbus.Conn, _, name string) (*dbus.Property, error) {
+		if name == "Type" {
+			typeCalls++
+			return nil, errors.New("no such unit")
+		}
+		return nil, errors.New("no NRestarts")
+	})
+	unit := dbus.UnitStatus{Name: "missing.service", SubState: "dead", LoadState: "not-found"}
+	for tick := 0; tick < 2; tick++ {
+		ch := make(chan prometheus.Metric, 8)
+		c.collectAnalysisMetrics(context.Background(), ch, nil, unit)
+		got := takeMetrics(ch)
+		if len(got) != 3 {
+			t.Fatalf("tick %d: metrics=%d want 3 (no restart counter)", tick, len(got))
+		}
+		if typ := metricLabel(t, got[0], "type"); typ != "unknown" {
+			t.Fatalf("tick %d: type=%q", tick, typ)
+		}
+	}
+	if typeCalls != 2 {
+		t.Fatalf("Type calls=%d want 2 when the read fails", typeCalls)
+	}
+}
+
+func TestSystemdInfoDropsCachedTypeWhenUnitLeaves(t *testing.T) {
+	c := newTestSystemdInfoCollector(nil)
+	c.unitType["gone.service"] = "simple"
+	c.unitType["keep.service"] = "notify"
+	c.retainUnitTypes(map[string]struct{}{"keep.service": {}})
+	if _, ok := c.unitType["gone.service"]; ok {
+		t.Fatal("cached Type for a unit that left the list must be dropped")
+	}
+	if c.unitType["keep.service"] != "notify" {
+		t.Fatalf("keep: %q", c.unitType["keep.service"])
+	}
+}
+
+func newTestSystemdInfoCollector(prop func(context.Context, *dbus.Conn, string, string) (*dbus.Property, error)) *systemdInfoCollector {
+	return &systemdInfoCollector{
+		serviceInfo: prometheus.NewDesc(
+			"node_systemd_service_info", "x", []string{"name", "type"}, nil,
+		),
+		serviceSubState: prometheus.NewDesc(
+			"node_systemd_service_sub_state", "x", []string{"name"}, nil,
+		),
+		serviceLoadState: prometheus.NewDesc(
+			"node_systemd_service_load_state", "x", []string{"name"}, nil,
+		),
+		serviceRestartTotal: prometheus.NewDesc(
+			"node_systemd_service_restart_total", "x", []string{"name"}, nil,
+		),
+		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		unitType:    map[string]string{},
+		serviceProp: prop,
+	}
+}
+
+func takeMetrics(ch <-chan prometheus.Metric) []prometheus.Metric {
+	var out []prometheus.Metric
+	for {
+		select {
+		case m := <-ch:
+			out = append(out, m)
+		default:
+			return out
+		}
+	}
+}
+
+func writeMetric(t *testing.T, m prometheus.Metric) dto.Metric {
+	t.Helper()
+	var dm dto.Metric
+	if err := m.Write(&dm); err != nil {
+		t.Fatal(err)
+	}
+	return dm
+}
+
+func metricLabel(t *testing.T, m prometheus.Metric, name string) string {
+	t.Helper()
+	dm := writeMetric(t, m)
+	for _, lp := range dm.Label {
+		if lp.GetName() == name {
+			return lp.GetValue()
+		}
+	}
+	t.Fatalf("label %s missing", name)
+	return ""
+}
+
+func metricValue(t *testing.T, m prometheus.Metric) float64 {
+	t.Helper()
+	dm := writeMetric(t, m)
+	if dm.Counter != nil {
+		return dm.Counter.GetValue()
+	}
+	if dm.Gauge != nil {
+		return dm.Gauge.GetValue()
+	}
+	t.Fatal("metric has no gauge or counter")
+	return 0
 }
