@@ -35,6 +35,16 @@ var errSystemdConnClosed = errors.New("systemd dbus connection closed")
 
 const systemdInfoUnitDeadline = 10 * time.Second
 
+// systemdInfoTypeTTL bounds how long a cached Service Type is reused.
+// Analysis re-reads Type after this, so a daemon-reload that changes Type=
+// shows up without a Get of the whole Service object on every tick.
+const systemdInfoTypeTTL = time.Hour
+
+type cachedServiceType struct {
+	value string
+	at    time.Time
+}
+
 // systemdConn serializes get/close of a long-lived dbus connection.
 type systemdConn struct {
 	mu     sync.Mutex
@@ -230,8 +240,8 @@ func (c *systemdServicesCollector) Close() error {
 }
 
 // systemdInfoCollector is analysis: Type, load/sub state, and NRestarts.
-// ListUnits already carries sub-state and load state. Type is read once per
-// unit name; each tick reads only Service.NRestarts.
+// ListUnits already carries sub-state and load state. Type is cached per
+// unit name until systemdInfoTypeTTL; each tick reads only Service.NRestarts.
 type systemdInfoCollector struct {
 	serviceInfo         *prometheus.Desc
 	serviceSubState     *prometheus.Desc
@@ -240,7 +250,7 @@ type systemdInfoCollector struct {
 	logger              *slog.Logger
 	sc                  systemdConn
 	typeMu              sync.Mutex
-	unitType            map[string]string
+	unitType            map[string]cachedServiceType
 	// serviceProp, when set, replaces the D-Bus Get for tests.
 	serviceProp func(ctx context.Context, conn *dbus.Conn, unit, name string) (*dbus.Property, error)
 }
@@ -272,7 +282,7 @@ func NewSystemdInfoCollector(logger *slog.Logger) (Collector, error) {
 			nil,
 		),
 		logger:   logger,
-		unitType: make(map[string]string),
+		unitType: make(map[string]cachedServiceType),
 	}, nil
 }
 
@@ -317,30 +327,49 @@ func (c *systemdInfoCollector) collectAnalysisMetrics(ctx context.Context, ch ch
 }
 
 func (c *systemdInfoCollector) serviceType(ctx context.Context, conn *dbus.Conn, name string) string {
-	c.typeMu.Lock()
-	if t, ok := c.unitType[name]; ok {
-		c.typeMu.Unlock()
-		return t
+	if value, ok, fresh := c.cachedServiceType(name); ok && fresh {
+		return value
 	}
-	c.typeMu.Unlock()
 	p, err := c.serviceProperty(ctx, conn, name, "Type")
 	if err != nil {
 		if ctx.Err() == nil {
 			c.logger.Debug("couldn't get unit type", "unit", name, "err", err)
 		}
-		return "unknown"
+		return c.serviceTypeOrUnknown(name)
 	}
 	t := serviceTypeFromProperty(p)
 	if t == "" {
-		return "unknown"
+		return c.serviceTypeOrUnknown(name)
 	}
-	c.typeMu.Lock()
-	if c.unitType == nil {
-		c.unitType = make(map[string]string)
-	}
-	c.unitType[name] = t
-	c.typeMu.Unlock()
+	c.storeServiceType(name, t)
 	return t
+}
+
+// cachedServiceType reports a cached Type. fresh is false once systemdInfoTypeTTL has elapsed.
+func (c *systemdInfoCollector) cachedServiceType(name string) (value string, ok, fresh bool) {
+	c.typeMu.Lock()
+	defer c.typeMu.Unlock()
+	ent, ok := c.unitType[name]
+	if !ok {
+		return "", false, false
+	}
+	return ent.value, true, time.Since(ent.at) < systemdInfoTypeTTL
+}
+
+func (c *systemdInfoCollector) serviceTypeOrUnknown(name string) string {
+	if value, ok, _ := c.cachedServiceType(name); ok {
+		return value
+	}
+	return "unknown"
+}
+
+func (c *systemdInfoCollector) storeServiceType(name, t string) {
+	c.typeMu.Lock()
+	defer c.typeMu.Unlock()
+	if c.unitType == nil {
+		c.unitType = make(map[string]cachedServiceType)
+	}
+	c.unitType[name] = cachedServiceType{value: t, at: time.Now()}
 }
 
 func (c *systemdInfoCollector) serviceProperty(ctx context.Context, conn *dbus.Conn, unit, name string) (*dbus.Property, error) {

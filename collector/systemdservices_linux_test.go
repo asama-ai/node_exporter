@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
 	godbus "github.com/godbus/dbus/v5"
@@ -289,14 +290,45 @@ func TestSystemdInfoTypeMissDoesNotCache(t *testing.T) {
 
 func TestSystemdInfoDropsCachedTypeWhenUnitLeaves(t *testing.T) {
 	c := newTestSystemdInfoCollector(nil)
-	c.unitType["gone.service"] = "simple"
-	c.unitType["keep.service"] = "notify"
+	c.unitType["gone.service"] = cachedServiceType{value: "simple", at: time.Now()}
+	c.unitType["keep.service"] = cachedServiceType{value: "notify", at: time.Now()}
 	c.retainUnitTypes(map[string]struct{}{"keep.service": {}})
 	if _, ok := c.unitType["gone.service"]; ok {
 		t.Fatal("cached Type for a unit that left the list must be dropped")
 	}
-	if c.unitType["keep.service"] != "notify" {
-		t.Fatalf("keep: %q", c.unitType["keep.service"])
+	if c.unitType["keep.service"].value != "notify" {
+		t.Fatalf("keep: %q", c.unitType["keep.service"].value)
+	}
+}
+
+func TestSystemdInfoRefreshesTypeAfterTTL(t *testing.T) {
+	calls := 0
+	c := newTestSystemdInfoCollector(func(_ context.Context, _ *dbus.Conn, _, name string) (*dbus.Property, error) {
+		if name != "Type" {
+			return &dbus.Property{Name: name, Value: godbus.MakeVariant(uint32(1))}, nil
+		}
+		calls++
+		return &dbus.Property{Name: name, Value: godbus.MakeVariant("notify")}, nil
+	})
+	c.unitType["a.service"] = cachedServiceType{
+		value: "simple",
+		at:    time.Now().Add(-systemdInfoTypeTTL),
+	}
+	unit := dbus.UnitStatus{Name: "a.service", SubState: "running", LoadState: "loaded"}
+	ch := make(chan prometheus.Metric, 8)
+	c.collectAnalysisMetrics(context.Background(), ch, nil, unit)
+	got := takeMetrics(ch)
+	if typ := metricLabel(t, got[0], "type"); typ != "notify" {
+		t.Fatalf("type=%q want notify after TTL", typ)
+	}
+	ch = make(chan prometheus.Metric, 8)
+	c.collectAnalysisMetrics(context.Background(), ch, nil, unit)
+	got = takeMetrics(ch)
+	if typ := metricLabel(t, got[0], "type"); typ != "notify" {
+		t.Fatalf("cached type=%q", typ)
+	}
+	if calls != 1 {
+		t.Fatalf("Type calls=%d want 1 refresh then a cache hit", calls)
 	}
 }
 
@@ -315,7 +347,7 @@ func newTestSystemdInfoCollector(prop func(context.Context, *dbus.Conn, string, 
 			"node_systemd_service_restart_total", "x", []string{"name"}, nil,
 		),
 		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
-		unitType:    map[string]string{},
+		unitType:    map[string]cachedServiceType{},
 		serviceProp: prop,
 	}
 }
