@@ -35,6 +35,16 @@ var errSystemdConnClosed = errors.New("systemd dbus connection closed")
 
 const systemdInfoUnitDeadline = 10 * time.Second
 
+// systemdInfoTypeTTL bounds how long a cached Service Type is reused.
+// Analysis re-reads Type after this, so a daemon-reload that changes Type=
+// shows up without a Get of the whole Service object on every tick.
+const systemdInfoTypeTTL = time.Hour
+
+type cachedServiceType struct {
+	value string
+	at    time.Time
+}
+
 // systemdConn serializes get/close of a long-lived dbus connection.
 type systemdConn struct {
 	mu     sync.Mutex
@@ -230,6 +240,8 @@ func (c *systemdServicesCollector) Close() error {
 }
 
 // systemdInfoCollector is analysis: Type, load/sub state, and NRestarts.
+// ListUnits already carries sub-state and load state. Type is cached per
+// unit name until systemdInfoTypeTTL; each tick reads only Service.NRestarts.
 type systemdInfoCollector struct {
 	serviceInfo         *prometheus.Desc
 	serviceSubState     *prometheus.Desc
@@ -237,6 +249,10 @@ type systemdInfoCollector struct {
 	serviceRestartTotal *prometheus.Desc
 	logger              *slog.Logger
 	sc                  systemdConn
+	typeMu              sync.Mutex
+	unitType            map[string]cachedServiceType
+	// serviceProp, when set, replaces the D-Bus Get for tests.
+	serviceProp func(ctx context.Context, conn *dbus.Conn, unit, name string) (*dbus.Property, error)
 }
 
 func NewSystemdInfoCollector(logger *slog.Logger) (Collector, error) {
@@ -265,7 +281,8 @@ func NewSystemdInfoCollector(logger *slog.Logger) (Collector, error) {
 			[]string{"name"},
 			nil,
 		),
-		logger: logger,
+		logger:   logger,
+		unitType: make(map[string]cachedServiceType),
 	}, nil
 }
 
@@ -276,6 +293,7 @@ func (c *systemdInfoCollector) Update(ch chan<- prometheus.Metric) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), systemdInfoUnitDeadline)
 	defer cancel()
+	present := make(map[string]struct{}, len(units))
 	for _, unit := range units {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -283,37 +301,113 @@ func (c *systemdInfoCollector) Update(ch chan<- prometheus.Metric) error {
 		if !isServiceUnit(unit.Name) {
 			continue
 		}
+		present[unit.Name] = struct{}{}
 		c.collectAnalysisMetrics(ctx, ch, conn, unit)
 	}
+	c.retainUnitTypes(present)
 	return nil
 }
 
 func (c *systemdInfoCollector) collectAnalysisMetrics(ctx context.Context, ch chan<- prometheus.Metric, conn *dbus.Conn, unit dbus.UnitStatus) {
-	serviceType := "unknown"
-	props, err := conn.GetUnitTypePropertiesContext(ctx, unit.Name, "Service")
-	if err != nil {
-		if ctx.Err() == nil {
-			c.logger.Debug("couldn't get unit service properties", "unit", unit.Name, "err", err)
-		}
-	} else if t := serviceTypeFromProps(props); t != "" {
-		serviceType = t
-	}
-	ch <- prometheus.MustNewConstMetric(c.serviceInfo, prometheus.GaugeValue, 1, unit.Name, serviceType)
+	ch <- prometheus.MustNewConstMetric(c.serviceInfo, prometheus.GaugeValue, 1, unit.Name, c.serviceType(ctx, conn, unit.Name))
 	ch <- prometheus.MustNewConstMetric(c.serviceSubState, prometheus.GaugeValue, parseSystemdSubState(unit.SubState), unit.Name)
 	ch <- prometheus.MustNewConstMetric(c.serviceLoadState, prometheus.GaugeValue, parseSystemdLoadState(unit.LoadState), unit.Name)
 
+	p, err := c.serviceProperty(ctx, conn, unit.Name, "NRestarts")
 	if err != nil {
+		// NRestarts wasn't added until systemd 235; absence is expected on older versions.
 		return
 	}
-	// NRestarts wasn't added until systemd 235; absence is expected on older versions.
-	fv, ok := nRestartsFromProps(props)
+	fv, ok := nRestartsFromProperty(p)
 	if !ok {
-		if raw, exists := props["NRestarts"]; exists {
-			c.logger.Debug("unexpected NRestarts value type", "unit", unit.Name, "type", fmt.Sprintf("%T", raw))
-		}
+		c.logger.Debug("unexpected NRestarts value type", "unit", unit.Name, "type", fmt.Sprintf("%T", p.Value.Value()))
 		return
 	}
 	ch <- prometheus.MustNewConstMetric(c.serviceRestartTotal, prometheus.CounterValue, fv, unit.Name)
+}
+
+func (c *systemdInfoCollector) serviceType(ctx context.Context, conn *dbus.Conn, name string) string {
+	if value, ok, fresh := c.cachedServiceType(name); ok && fresh {
+		return value
+	}
+	p, err := c.serviceProperty(ctx, conn, name, "Type")
+	if err != nil {
+		if ctx.Err() == nil {
+			c.logger.Debug("couldn't get unit type", "unit", name, "err", err)
+		}
+		return c.serviceTypeOrUnknown(name)
+	}
+	t := serviceTypeFromProperty(p)
+	if t == "" {
+		return c.serviceTypeOrUnknown(name)
+	}
+	c.storeServiceType(name, t)
+	return t
+}
+
+// cachedServiceType reports a cached Type. fresh is false once systemdInfoTypeTTL has elapsed.
+func (c *systemdInfoCollector) cachedServiceType(name string) (value string, ok, fresh bool) {
+	c.typeMu.Lock()
+	defer c.typeMu.Unlock()
+	ent, ok := c.unitType[name]
+	if !ok {
+		return "", false, false
+	}
+	return ent.value, true, time.Since(ent.at) < systemdInfoTypeTTL
+}
+
+func (c *systemdInfoCollector) serviceTypeOrUnknown(name string) string {
+	if value, ok, _ := c.cachedServiceType(name); ok {
+		return value
+	}
+	return "unknown"
+}
+
+func (c *systemdInfoCollector) storeServiceType(name, t string) {
+	c.typeMu.Lock()
+	defer c.typeMu.Unlock()
+	if c.unitType == nil {
+		c.unitType = make(map[string]cachedServiceType)
+	}
+	c.unitType[name] = cachedServiceType{value: t, at: time.Now()}
+}
+
+func (c *systemdInfoCollector) serviceProperty(ctx context.Context, conn *dbus.Conn, unit, name string) (*dbus.Property, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if c.serviceProp != nil {
+		return c.serviceProp(ctx, conn, unit, name)
+	}
+	if conn == nil {
+		return nil, errSystemdConnClosed
+	}
+	return conn.GetUnitTypePropertyContext(ctx, unit, "Service", name)
+}
+
+func (c *systemdInfoCollector) retainUnitTypes(present map[string]struct{}) {
+	c.typeMu.Lock()
+	defer c.typeMu.Unlock()
+	for name := range c.unitType {
+		if _, ok := present[name]; !ok {
+			delete(c.unitType, name)
+		}
+	}
+}
+
+func serviceTypeFromProperty(p *dbus.Property) string {
+	if p == nil {
+		return ""
+	}
+	s, _ := p.Value.Value().(string)
+	return s
+}
+
+func nRestartsFromProperty(p *dbus.Property) (float64, bool) {
+	if p == nil {
+		return 0, false
+	}
+	return dbusNumericToFloat64(p.Value.Value())
 }
 
 func serviceTypeFromProps(props map[string]any) string {
